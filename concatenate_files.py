@@ -48,6 +48,7 @@ def get_language_for_extension(file_ext: str) -> str | None:
         ".csv": "csv",
         ".ini": "ini",
         ".ijs": "jslang",
+        ".nix": "nix",
     }
     # Special-case Dockerfile (if the file name is literally "Dockerfile")
     if file_ext == "" and "Dockerfile" in extension_map:
@@ -69,12 +70,8 @@ def collect_gitignore_specs(root_path: Path) -> dict[str, PathSpec]:
         dirpath = Path(dirpath)
         rel_path = dirpath.relative_to(root_path)
 
-        # Skip directory if it's ignored
-        if is_ignored(dirpath, gitignore_specs, root_path):
-            dirnames.clear()  # Prevents os.walk from descending into this directory
-            continue
-
-        all_patterns = [".git/"]  # Always ignore .git/
+        # Read and store .gitignore rules before checking if dir should be ignored
+        all_patterns = [".git/"]
 
         gitignore_file = dirpath / ".gitignore"
         if gitignore_file.exists():
@@ -83,16 +80,16 @@ def collect_gitignore_specs(root_path: Path) -> dict[str, PathSpec]:
                     patterns = f.read().splitlines()
                 all_patterns.extend(patterns)
             except Exception as e:
-                print(
-                    f"Warning: Could not read {gitignore_file} due to error: {e}",
-                    file=sys.stderr,
-                )
+                print(f"Warning: Could not read {gitignore_file} due to error: {e}", file=sys.stderr)
 
-        # Create PathSpec for the directory
+        # Create and store PathSpec for this directory
         gitignore_specs[rel_path.as_posix()] = PathSpec.from_lines(GitWildMatchPattern, all_patterns)
 
-    return gitignore_specs
+        # Check if the directory itself is ignored
+        if is_ignored(dirpath, gitignore_specs, root_path):
+            dirnames.clear()
 
+    return gitignore_specs
 
 
 def is_ignored(path: Path, gitignore_specs: dict[str, PathSpec], root_path: Path) -> bool:
@@ -100,17 +97,24 @@ def is_ignored(path: Path, gitignore_specs: dict[str, PathSpec], root_path: Path
     Check if a file or directory is ignored based on cascading .gitignore rules.
     """
     rel_path = path.relative_to(root_path)
-    
+
     # Traverse up the directory tree to apply relevant .gitignore rules
-    parts = rel_path.parts
     current_path = Path()
-    for part in parts:
+    for part in rel_path.parts:
         current_path = current_path / part
-        if current_path.as_posix() in gitignore_specs:
-            if gitignore_specs[current_path.as_posix()].match_file(rel_path.as_posix()):
+
+        # If the directory containing this file has a .gitignore rule, check it
+        parent_str = current_path.parent.as_posix() if current_path.parent != Path('.') else '.'
+
+        if parent_str in gitignore_specs:
+            spec = gitignore_specs[parent_str]
+            if spec.match_file(rel_path.as_posix()):
                 return True
-    
+
     return False
+
+
+
 
 
 def generate_tree(root_path: Path, gitignore_specs: dict[str, PathSpec]) -> str:

@@ -6,8 +6,22 @@
             "type": "debugpy",
             "request": "launch",
             "program": "${workspaceFolder}/concatenate_files.py",
-            "args": ["~/workspace/comment-parser"],
+            "args": [
+                "~/workspace/comment-parser"
+            ],
             "console": "integratedTerminal"
+        },
+        {
+            "name": "Python: Pytest Debug",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "pytest",
+            "console": "integratedTerminal",
+            "justMyCode": false,
+            "args": [
+                "-k",
+                "test_generate_tree"
+            ]
         }
     ]
 }
