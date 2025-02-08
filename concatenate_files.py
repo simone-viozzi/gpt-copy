@@ -140,7 +140,9 @@ def collect_files_content(
         if gitignore_spec and gitignore_spec.match_file(rel_path):
             continue
 
-        if os.path.basename(full_file_path) == os.path.basename(output_file):
+        if output_file and (
+            os.path.basename(full_file_path) == os.path.basename(output_file)
+        ):
             continue
 
         _, ext = os.path.splitext(full_file_path)
@@ -222,7 +224,7 @@ def main(root_path: str, output_file: str | None) -> None:
     if unrecognized_files:
         print(
             "Some files were not recognized and were skipped. See 'Unrecognized Files' section.",
-            file=sys.stderr
+            file=sys.stderr,
         )
 
 

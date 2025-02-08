@@ -24,6 +24,7 @@ in pkgs.mkShell rec {
     pythonPackages.click
     pythonPackages.pathspec
     pythonPackages.tqdm
+    pythonPackages.pytest
     pre-commit
   ];
 
