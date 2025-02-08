@@ -5,7 +5,7 @@ from click.testing import CliRunner
 from concatenate_files import (
     get_language_for_extension,
     generate_tree,
-    collect_gitignore_patterns,
+    collect_gitignore_specs,
     collect_files_content,
     main,
 )
@@ -48,31 +48,29 @@ def test_get_language_for_extension():
 
 def test_generate_tree(temp_directory):
     """Ensure directory tree generation works correctly."""
-    tree = generate_tree(temp_directory, None)
+    gitignore_specs = collect_gitignore_specs(temp_directory)
+    tree = generate_tree(temp_directory, gitignore_specs)
     assert "file.py" in tree
     assert "subdir" in tree
+    assert "file.txt" not in tree  # Should be ignored by .gitignore
 
 
-def test_collect_gitignore_patterns(temp_directory):
-    """Ensure gitignore patterns are correctly collected."""
-    spec = collect_gitignore_patterns(temp_directory)
-    assert spec is not None
-    assert spec.match_file("file.txt")  # Should be ignored
-    assert spec.match_file("subdir/script.js")  # Should be ignored
+def test_collect_gitignore_specs(temp_directory):
+    """Ensure gitignore rules are correctly collected and applied."""
+    specs = collect_gitignore_specs(temp_directory)
+    assert specs is not None
+    assert any(spec.match_file("file.txt") for spec in specs.values())  # Should be ignored
+    assert any(spec.match_file("subdir/script.js") for spec in specs.values())  # Should be ignored
 
 
 def test_collect_files_content(temp_directory):
     """Ensure files are correctly collected and recognized."""
-    spec = collect_gitignore_patterns(temp_directory)
-    files, unrecognized = collect_files_content(temp_directory, spec, None)
-
-    print(unrecognized)
+    gitignore_specs = collect_gitignore_specs(temp_directory)
+    files, unrecognized = collect_files_content(temp_directory, gitignore_specs, None)
 
     assert len(files) > 0  # We should have some recognized files
     assert any("python" in f for f in files)  # Python file should be there
-    assert any(
-        "document.pkl" in f for f in unrecognized
-    )  # PDF file should be unrecognized
+    assert "document.pkl" in unrecognized  # Unrecognized file should be listed
 
 
 def test_cli(temp_directory):

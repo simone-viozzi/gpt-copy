@@ -1,0 +1,13 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Python: Concatenate Files",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/concatenate_files.py",
+            "args": ["~/workspace/comment-parser"],
+            "console": "integratedTerminal"
+        }
+    ]
+}

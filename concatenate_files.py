@@ -60,13 +60,20 @@ def collect_gitignore_specs(root_path: str) -> dict[str, PathSpec]:
     """
     Traverse directories and build a dictionary of PathSpec objects
     corresponding to each directory where a .gitignore file is found.
+    Skip directories that are already ignored.
     """
     print("Collecting .gitignore rules per directory...", file=sys.stderr)
     gitignore_specs = {}
 
-    for dirpath, _, filenames in tqdm(os.walk(root_path), desc="Scanning Directories"):
+    for dirpath, dirnames, filenames in tqdm(os.walk(root_path), desc="Scanning Directories"):
+        rel_path = os.path.relpath(dirpath, root_path)
+
+        # Skip directory if it's ignored
+        if is_ignored(dirpath, gitignore_specs, root_path):
+            dirnames.clear()  # Prevents os.walk from descending into this directory
+            continue
+
         all_patterns = [".git/"]  # Always ignore .git/
-        parent_dir = os.path.relpath(dirpath, root_path)
 
         if ".gitignore" in filenames:
             gitignore_path = os.path.join(dirpath, ".gitignore")
@@ -79,11 +86,12 @@ def collect_gitignore_specs(root_path: str) -> dict[str, PathSpec]:
                     f"Warning: Could not read {gitignore_path} due to error: {e}",
                     file=sys.stderr,
                 )
-        
+
         # Create PathSpec for the directory
-        gitignore_specs[parent_dir] = PathSpec.from_lines(GitWildMatchPattern, all_patterns)
+        gitignore_specs[rel_path] = PathSpec.from_lines(GitWildMatchPattern, all_patterns)
 
     return gitignore_specs
+
 
 
 def is_ignored(path: str, gitignore_specs: dict[str, PathSpec], root_path: str) -> bool:
