@@ -2,7 +2,7 @@ import tempfile
 import pytest
 from pathlib import Path
 from click.testing import CliRunner
-from concatenate_files import (
+from src.concatenate_files.concatenate_files import (
     get_language_for_extension,
     generate_tree,
     collect_gitignore_specs,
