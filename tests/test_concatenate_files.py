@@ -36,7 +36,7 @@ def temp_directory():
             "*.txt\nsubdir/\n*.png\n*.pdf", encoding="utf-8"
         )
 
-        yield temp_dir  # Provide the temp directory path
+        yield temp_dir
 
 
 def test_get_language_for_extension():
@@ -52,15 +52,15 @@ def test_generate_tree(temp_directory):
     tree = generate_tree(temp_directory, gitignore_specs)
     assert "file.py" in tree
     assert "subdir" in tree
-    assert "file.txt" not in tree  # Should be ignored by .gitignore
+    assert "file.txt" not in tree
 
 
 def test_collect_gitignore_specs(temp_directory):
     """Ensure gitignore rules are correctly collected and applied."""
     specs = collect_gitignore_specs(temp_directory)
     assert specs is not None
-    assert any(spec.match_file("file.txt") for spec in specs.values())  # Should be ignored
-    assert any(spec.match_file("subdir/script.js") for spec in specs.values())  # Should be ignored
+    assert any(spec.match_file("file.txt") for spec in specs.values())
+    assert any(spec.match_file("subdir/script.js") for spec in specs.values())
 
 
 def test_collect_files_content(temp_directory):
@@ -68,9 +68,9 @@ def test_collect_files_content(temp_directory):
     gitignore_specs = collect_gitignore_specs(temp_directory)
     files, unrecognized = collect_files_content(temp_directory, gitignore_specs, None)
 
-    assert len(files) > 0  # We should have some recognized files
-    assert any("python" in f for f in files)  # Python file should be there
-    assert "document.pkl" in unrecognized  # Unrecognized file should be listed
+    assert len(files) > 0
+    assert any("python" in f for f in files)
+    assert "document.pkl" in unrecognized
 
 
 def test_cli(temp_directory):
@@ -80,4 +80,4 @@ def test_cli(temp_directory):
     assert result.exit_code == 0
     assert "Folder Structure" in result.output
     assert "file.py" in result.output
-    assert "file.txt" not in result.output  # .gitignore should exclude it
+    assert "file.txt" not in result.output

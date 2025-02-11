@@ -5,8 +5,9 @@ import click
 from pathspec import PathSpec
 from pathspec.patterns.gitwildmatch import GitWildMatchPattern
 from tqdm import tqdm
-from typing import Tuple, TextIO
+from typing import TextIO
 import os
+
 
 def get_language_for_extension(file_ext: str) -> str | None:
     """
@@ -66,7 +67,10 @@ def collect_gitignore_specs(root_path: Path) -> dict[str, PathSpec]:
     print("Collecting .gitignore rules per directory...", file=sys.stderr)
     gitignore_specs = {}
 
-    for dirpath, dirnames, filenames in tqdm(os.walk(root_path), desc="Scanning Directories"):
+    for dirpath, dirnames, filenames in tqdm(
+        os.walk(root_path),
+        desc="Scanning Directories",
+    ):
         dirpath = Path(dirpath)
         rel_path = dirpath.relative_to(root_path)
 
@@ -80,10 +84,16 @@ def collect_gitignore_specs(root_path: Path) -> dict[str, PathSpec]:
                     patterns = f.read().splitlines()
                 all_patterns.extend(patterns)
             except Exception as e:
-                print(f"Warning: Could not read {gitignore_file} due to error: {e}", file=sys.stderr)
+                print(
+                    f"Warning: Could not read {gitignore_file} due to error: {e}",
+                    file=sys.stderr,
+                )
 
         # Create and store PathSpec for this directory
-        gitignore_specs[rel_path.as_posix()] = PathSpec.from_lines(GitWildMatchPattern, all_patterns)
+        gitignore_specs[rel_path.as_posix()] = PathSpec.from_lines(
+            GitWildMatchPattern,
+            all_patterns,
+        )
 
         # Check if the directory itself is ignored
         if is_ignored(dirpath, gitignore_specs, root_path):
@@ -92,7 +102,11 @@ def collect_gitignore_specs(root_path: Path) -> dict[str, PathSpec]:
     return gitignore_specs
 
 
-def is_ignored(path: Path, gitignore_specs: dict[str, PathSpec], root_path: Path) -> bool:
+def is_ignored(
+    path: Path,
+    gitignore_specs: dict[str, PathSpec],
+    root_path: Path,
+) -> bool:
     """
     Check if a file or directory is ignored based on cascading .gitignore rules.
     """
@@ -104,7 +118,9 @@ def is_ignored(path: Path, gitignore_specs: dict[str, PathSpec], root_path: Path
         current_path = current_path / part
 
         # If the directory containing this file has a .gitignore rule, check it
-        parent_str = current_path.parent.as_posix() if current_path.parent != Path('.') else '.'
+        parent_str = (
+            current_path.parent.as_posix() if current_path.parent != Path(".") else "."
+        )
 
         if parent_str in gitignore_specs:
             spec = gitignore_specs[parent_str]
@@ -112,9 +128,6 @@ def is_ignored(path: Path, gitignore_specs: dict[str, PathSpec], root_path: Path
                 return True
 
     return False
-
-
-
 
 
 def generate_tree(root_path: Path, gitignore_specs: dict[str, PathSpec]) -> str:
@@ -154,7 +167,7 @@ def collect_files_content(
     root_path: Path,
     gitignore_specs: dict[str, PathSpec],
     output_file: str | None,
-) -> Tuple[list[str], list[str]]:
+) -> tuple[list[str], list[str]]:
     """
     Walk the directory structure, respecting gitignore, and collect
     file contents or note them as unrecognized.
@@ -227,7 +240,13 @@ def write_output(
 
 @click.command()
 @click.argument(
-    "root_path", type=click.Path(exists=True, file_okay=False, dir_okay=True, path_type=Path)
+    "root_path",
+    type=click.Path(
+        exists=True,
+        file_okay=False,
+        dir_okay=True,
+        path_type=Path,
+    ),
 )
 @click.option(
     "-o",
