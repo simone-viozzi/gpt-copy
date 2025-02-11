@@ -8,6 +8,7 @@ from src.concatenate_files.concatenate_files import (
     collect_gitignore_specs,
     collect_files_content,
     main,
+    is_ignored,
 )
 
 
@@ -33,7 +34,11 @@ def temp_directory():
 
         # Create a .gitignore file
         (root / ".gitignore").write_text(
-            "*.txt\nsubdir/\n*.png\n*.pdf", encoding="utf-8"
+            """subdir/
+            *.png
+            *.pdf
+            """.replace(" ", ""),
+            encoding="utf-8",
         )
 
         yield temp_dir
@@ -52,15 +57,32 @@ def test_generate_tree(temp_directory):
     tree = generate_tree(temp_directory, gitignore_specs)
     assert "file.py" in tree
     assert "subdir" in tree
-    assert "file.txt" not in tree
+    assert "file.txt" in tree
+    assert "subdir/script.js" not in tree
+    assert "image.png" not in tree
+    assert "document.pdf" not in tree
+    assert "document.pkl" not in tree
 
 
 def test_collect_gitignore_specs(temp_directory):
     """Ensure gitignore rules are correctly collected and applied."""
     specs = collect_gitignore_specs(temp_directory)
     assert specs is not None
-    assert any(spec.match_file("file.txt") for spec in specs.values())
+    assert any(spec.match_file("document.pdf") for spec in specs.values())
     assert any(spec.match_file("subdir/script.js") for spec in specs.values())
+    assert any(spec.match_file("image.png") for spec in specs.values())
+
+
+def test_is_ignored(temp_directory):
+    """Ensure files are correctly ignored."""
+    gitignore_specs = collect_gitignore_specs(temp_directory)
+    temp_directory = Path(temp_directory)
+    assert is_ignored(temp_directory / "document.pdf", gitignore_specs, temp_directory)
+    assert is_ignored(
+        temp_directory / "subdir/script.js", gitignore_specs, temp_directory
+    )
+    assert is_ignored(temp_directory / "image.png", gitignore_specs, temp_directory)
+    assert not is_ignored(temp_directory / "file.py", gitignore_specs, temp_directory)
 
 
 def test_collect_files_content(temp_directory):
@@ -80,4 +102,4 @@ def test_cli(temp_directory):
     assert result.exit_code == 0
     assert "Folder Structure" in result.output
     assert "file.py" in result.output
-    assert "file.txt" not in result.output
+    assert "file.txt" in result.output
