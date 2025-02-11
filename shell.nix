@@ -16,6 +16,8 @@ in pkgs.mkShell rec {
     git-crypt
     stdenv.cc.cc.lib
     stdenv.cc.cc # jupyter lab needs
+    zlib
+    zlib.out
     pythonPackages.python
     pythonPackages.pyzmq # Adding pyzmq explicitly
     pythonPackages.venvShellHook
@@ -42,5 +44,6 @@ in pkgs.mkShell rec {
     export PKG_CONFIG_PATH="${pkgs.openssl.dev}/lib/pkgconfig:$PKG_CONFIG_PATH"
 
     echo "Environment setup complete."
+    export LD_LIBRARY_PATH=${pkgs.zlib}/lib:$LD_LIBRARY_PATH
   '';
 }
