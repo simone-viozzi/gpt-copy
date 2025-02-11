@@ -2,6 +2,9 @@ import tempfile
 import pytest
 from pathlib import Path
 from click.testing import CliRunner
+import pickle
+from collections.abc import Generator
+
 from src.concatenate_files.concatenate_files import (
     get_language_for_extension,
     generate_tree,
@@ -13,8 +16,8 @@ from src.concatenate_files.concatenate_files import (
 
 
 @pytest.fixture
-def temp_directory():
-    """Create a temporary directory with test files."""
+def temp_directory() -> Generator[Path, None, None]:
+    """Create a temporary directory with test files and a .gitignore."""
     with tempfile.TemporaryDirectory() as temp_dir:
         root = Path(temp_dir)
         (root / "file.py").write_text("print('Hello, world!')", encoding="utf-8")
@@ -28,9 +31,9 @@ def temp_directory():
             b"%PDF-1.4\n%\xc3\xa2\xc3\xa3\xc3\x8f\xc3\x93\n1 0 obj\n<<\n/Type /Catalog\n"
         )
 
-        (root / "document.pkl").write_bytes(
-            b"%PDF-1.4\n%\xc3\xa2\xc3\xa3\xc3\x8f\xc3\x93\n1 0 obj\n<<\n/Type /Catalog\n"
-        )
+        data = {"key": "value", "number": 42}
+        with open(root / "document.pkl", "wb") as f:
+            pickle.dump(data, f)
 
         # Create a .gitignore file
         (root / ".gitignore").write_text(
@@ -41,7 +44,7 @@ def temp_directory():
             encoding="utf-8",
         )
 
-        yield temp_dir
+        yield root
 
 
 def test_get_language_for_extension():
@@ -51,20 +54,21 @@ def test_get_language_for_extension():
     assert get_language_for_extension(".unknown") is None
 
 
-def test_generate_tree(temp_directory):
-    """Ensure directory tree generation works correctly."""
+def test_generate_tree(temp_directory: Path):
+    """Ensure directory tree generation works correctly using .gitignore rules."""
     gitignore_specs = collect_gitignore_specs(temp_directory)
-    tree = generate_tree(temp_directory, gitignore_specs)
+    tree = generate_tree(temp_directory, gitignore_specs, tracked_files=None)
+
     assert "file.py" in tree
     assert "subdir" in tree
     assert "file.txt" in tree
     assert "subdir/script.js" not in tree
     assert "image.png" not in tree
     assert "document.pdf" not in tree
-    assert "document.pkl" not in tree
+    assert "document.pkl" in tree
 
 
-def test_collect_gitignore_specs(temp_directory):
+def test_collect_gitignore_specs(temp_directory: Path):
     """Ensure gitignore rules are correctly collected and applied."""
     specs = collect_gitignore_specs(temp_directory)
     assert specs is not None
@@ -73,10 +77,11 @@ def test_collect_gitignore_specs(temp_directory):
     assert any(spec.match_file("image.png") for spec in specs.values())
 
 
-def test_is_ignored(temp_directory):
-    """Ensure files are correctly ignored."""
+def test_is_ignored(temp_directory: Path):
+    """Ensure files are correctly ignored using .gitignore logic."""
     gitignore_specs = collect_gitignore_specs(temp_directory)
     temp_directory = Path(temp_directory)
+
     assert is_ignored(temp_directory / "document.pdf", gitignore_specs, temp_directory)
     assert is_ignored(
         temp_directory / "subdir/script.js", gitignore_specs, temp_directory
@@ -85,7 +90,7 @@ def test_is_ignored(temp_directory):
     assert not is_ignored(temp_directory / "file.py", gitignore_specs, temp_directory)
 
 
-def test_collect_files_content(temp_directory):
+def test_collect_files_content(temp_directory: Path):
     """Ensure files are correctly collected and recognized."""
     gitignore_specs = collect_gitignore_specs(temp_directory)
     files, unrecognized = collect_files_content(temp_directory, gitignore_specs, None)
@@ -95,10 +100,10 @@ def test_collect_files_content(temp_directory):
     assert "document.pkl" in unrecognized
 
 
-def test_cli(temp_directory):
-    """Test CLI execution with Click."""
+def test_cli(temp_directory: Path):
+    """Test CLI execution with Click (using manual .gitignore parsing)."""
     runner = CliRunner()
-    result = runner.invoke(main, [temp_directory])
+    result = runner.invoke(main, [temp_directory.as_posix()])
     assert result.exit_code == 0
     assert "Folder Structure" in result.output
     assert "file.py" in result.output
