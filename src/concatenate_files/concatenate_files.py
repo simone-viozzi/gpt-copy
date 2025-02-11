@@ -170,12 +170,13 @@ def collect_files_content(
     unrecognized_files = []
     root_path = Path(root_path)
 
-    file_list = []
+    file_list: list[Path] = []
     for dirpath, _, filenames in os.walk(root_path):
         for filename in filenames:
             file_list.append(Path(dirpath) / filename)
 
     for full_file_path in tqdm(file_list, desc="Processing Files"):
+        full_file_path: Path
         if is_ignored(full_file_path, gitignore_specs, root_path):
             continue
 
