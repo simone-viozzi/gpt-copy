@@ -1,12 +1,14 @@
 #!/usr/bin/env python3
-from pathlib import Path
+import os
 import sys
+from pathlib import Path
+from typing import TextIO
+
 import click
+import pygit2
 from pathspec import PathSpec
 from pathspec.patterns.gitwildmatch import GitWildMatchPattern
 from tqdm import tqdm
-from typing import TextIO
-import os
 
 
 def get_language_for_extension(file_ext: str) -> str | None:
@@ -57,46 +59,44 @@ def get_language_for_extension(file_ext: str) -> str | None:
     return extension_map.get(file_ext.lower(), None)
 
 
+def find_git_repo(path: Path) -> pygit2.Repository | None:
+    """Search for a Git repository in the given directory or its parents."""
+    try:
+        return pygit2.Repository(path.resolve().as_posix())
+    except pygit2.GitError:
+        return None
+
+
+def get_tracked_files(repo: pygit2.Repository) -> set[str]:
+    """Returns a set of all tracked files in the repository."""
+    return {entry.path for entry in repo.index}
+
+
 def collect_gitignore_specs(root_path: Path) -> dict[str, PathSpec]:
-    """
-    Traverse directories and build a dictionary of PathSpec objects
-    corresponding to each directory where a .gitignore file is found.
-    Skip directories that are already ignored.
-    """
+    """Traverse directories and build a dictionary of PathSpec objects for .gitignore rules."""
     print("Collecting .gitignore rules per directory...", file=sys.stderr)
     gitignore_specs = {}
 
     for dirpath, dirnames, filenames in tqdm(
-        os.walk(root_path),
-        desc="Scanning Directories",
+        os.walk(root_path), desc="Scanning Directories"
     ):
         dirpath = Path(dirpath)
         rel_path = dirpath.relative_to(root_path)
-
-        # Skip directory if it's ignored
-        if is_ignored(dirpath, gitignore_specs, root_path):
-            dirnames.clear()  # Prevents os.walk from descending into this directory
-            continue
-
-        all_patterns = [".git/"]  # Always ignore .git/
 
         gitignore_file = dirpath / ".gitignore"
         if gitignore_file.exists():
             try:
                 with gitignore_file.open("r", encoding="utf-8") as f:
                     patterns = f.read().splitlines()
-                all_patterns.extend(patterns)
+                patterns.append(".git/")  # Always ignore .git/
+                gitignore_specs[rel_path.as_posix()] = PathSpec.from_lines(
+                    GitWildMatchPattern, patterns
+                )
             except Exception as e:
                 print(
                     f"Warning: Could not read {gitignore_file} due to error: {e}",
                     file=sys.stderr,
                 )
-
-        # Create PathSpec for the directory
-        gitignore_specs[rel_path.as_posix()] = PathSpec.from_lines(
-            GitWildMatchPattern,
-            all_patterns,
-        )
 
     return gitignore_specs
 
@@ -105,32 +105,30 @@ def is_ignored(
     path: Path,
     gitignore_specs: dict[str, PathSpec],
     root_path: Path,
+    tracked_files: set[str] | None = None,
 ) -> bool:
-    """
-    Check if a file or directory is ignored based on cascading .gitignore rules.
-    """
-    rel_path = path.relative_to(root_path)
+    """Check if a file is ignored based on Git tracked files or .gitignore rules."""
+    rel_path = path.relative_to(root_path).as_posix()
 
-    # Traverse up the directory tree to apply relevant .gitignore rules
-    parts = rel_path.parts
-    current_path = Path()
-    for part in parts:
-        current_path = current_path / part
-        if current_path.as_posix() in gitignore_specs:
-            if gitignore_specs[current_path.as_posix()].match_file(rel_path.as_posix()):
-                return True
+    # If using Git tracking, ignore files that are NOT tracked
+    if tracked_files is not None:
+        return rel_path not in tracked_files
+
+    for rule_path, spec in gitignore_specs.items():
+        if spec.match_file(rel_path):
+            return True
 
     return False
 
 
-def generate_tree(root_path: Path, gitignore_specs: dict[str, PathSpec]) -> str:
-    """
-    Generate a textual tree representation of the folder structure,
-    excluding files/dirs matched by their respective .gitignore rules.
-    """
+def generate_tree(
+    root_path: Path,
+    gitignore_specs: dict[str, PathSpec],
+    tracked_files: set[str] | None,
+) -> str:
+    """Generate a textual tree representation of the folder structure."""
     print("Generating folder structure tree...", file=sys.stderr)
-    tree_lines = []
-    root_path = Path(root_path)
+    tree_lines = [root_path.name or str(root_path)]
 
     def _tree(dir_path: Path, prefix=""):
         try:
@@ -140,7 +138,7 @@ def generate_tree(root_path: Path, gitignore_specs: dict[str, PathSpec]) -> str:
             return
 
         for i, entry in enumerate(entries):
-            if is_ignored(entry, gitignore_specs, root_path):
+            if is_ignored(entry, gitignore_specs, root_path, tracked_files):
                 continue
 
             connector = "└── " if i == len(entries) - 1 else "├── "
@@ -150,8 +148,6 @@ def generate_tree(root_path: Path, gitignore_specs: dict[str, PathSpec]) -> str:
                 extension = "    " if i == len(entries) - 1 else "│   "
                 _tree(entry, prefix + extension)
 
-    root_basename = root_path.name or str(root_path)
-    tree_lines.append(root_basename)
     _tree(root_path)
     return "\n".join(tree_lines)
 
@@ -160,48 +156,47 @@ def collect_files_content(
     root_path: Path,
     gitignore_specs: dict[str, PathSpec],
     output_file: str | None,
+    tracked_files: set[str] | None = None,
 ) -> tuple[list[str], list[str]]:
-    """
-    Walk the directory structure, respecting gitignore, and collect
-    file contents or note them as unrecognized.
-    """
+    """Collect file contents based on tracking and .gitignore rules."""
     print("Collecting file contents...", file=sys.stderr)
     file_sections = []
     unrecognized_files = []
-    root_path = Path(root_path)
 
-    file_list: list[Path] = []
     for dirpath, _, filenames in os.walk(root_path):
         for filename in filenames:
-            file_list.append(Path(dirpath) / filename)
+            full_file_path = Path(dirpath) / filename
 
-    for full_file_path in tqdm(file_list, desc="Processing Files"):
-        full_file_path: Path
-        if is_ignored(full_file_path, gitignore_specs, root_path):
-            continue
+            if is_ignored(full_file_path, gitignore_specs, root_path, tracked_files):
+                continue
 
-        if output_file and (full_file_path.name == Path(output_file).name):
-            continue
+            if output_file and (full_file_path.name == Path(output_file).name):
+                continue
 
-        rel_path = full_file_path.relative_to(root_path)
-        ext = full_file_path.suffix
-        language = get_language_for_extension(ext)
+            rel_path = full_file_path.relative_to(root_path)
+            ext = full_file_path.suffix
+            language = get_language_for_extension(ext)
 
-        if language:
-            try:
-                with full_file_path.open("r", encoding="utf-8", errors="replace") as f:
-                    content = f.read()
+            if language:
+                try:
+                    with full_file_path.open(
+                        "r", encoding="utf-8", errors="replace"
+                    ) as f:
+                        content = f.read()
 
-                file_header = f"## File: `{rel_path}`\n*(Relative Path: `{rel_path}`)*"
-                fenced_content = f"```{language}\n{content}\n```"
-                section = f"{file_header}\n\n{fenced_content}\n\n---\n"
-                file_sections.append(section)
-            except Exception as e:
-                print(
-                    f"Skipping file {rel_path} due to read error: {e}", file=sys.stderr
-                )
-        else:
-            unrecognized_files.append(rel_path.as_posix())
+                    file_header = (
+                        f"## File: `{rel_path}`\n*(Relative Path: `{rel_path}`)*"
+                    )
+                    fenced_content = f"```{language}\n{content}\n```"
+                    section = f"{file_header}\n\n{fenced_content}\n\n---\n"
+                    file_sections.append(section)
+                except Exception as e:
+                    print(
+                        f"Skipping file {rel_path} due to read error: {e}",
+                        file=sys.stderr,
+                    )
+            else:
+                unrecognized_files.append(rel_path.as_posix())
 
     return file_sections, unrecognized_files
 
@@ -212,11 +207,8 @@ def write_output(
     file_sections: list[str],
     unrecognized_files: list[str],
 ) -> None:
-    """
-    Write the collected outputs to the specified output (file or stdout).
-    """
-    output.write("# Folder Structure\n\n")
-    output.write("```\n")
+    """Write collected outputs to the specified output (file or stdout)."""
+    output.write("# Folder Structure\n\n```\n")
     output.write(tree_output)
     output.write("\n```\n\n")
 
@@ -252,10 +244,13 @@ def write_output(
 def main(root_path: Path, output_file: str | None) -> None:
     print(f"Starting script for directory: {root_path}", file=sys.stderr)
 
-    gitignore_specs = collect_gitignore_specs(root_path)
-    tree_output = generate_tree(root_path, gitignore_specs)
+    repo = find_git_repo(root_path)
+    tracked_files = get_tracked_files(repo) if repo else None
+    gitignore_specs = {} if repo else collect_gitignore_specs(root_path)
+
+    tree_output = generate_tree(root_path, gitignore_specs, tracked_files)
     file_sections, unrecognized_files = collect_files_content(
-        root_path, gitignore_specs, output_file
+        root_path, gitignore_specs, output_file, tracked_files
     )
 
     if output_file:
