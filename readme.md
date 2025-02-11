@@ -42,7 +42,7 @@ python concatenate_files.py /path/to/directory -o output.md
    - Skips binary or unrecognized file types.
 
 ## Example Output
-```
+````
 # Folder Structure
 
 ```
@@ -70,7 +70,7 @@ print("Hello, World!")
 version: 1.0
 enabled: true
 ```
-```
+````
 
 ## Contributing
 If you'd like to contribute, feel free to open a pull request.
