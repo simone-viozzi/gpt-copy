@@ -32,6 +32,11 @@ def git_repo() -> Generator[Path, None, None]:
             encoding="utf-8",
         )
 
+        (root / "tracked_folder").mkdir()
+        (root / "tracked_folder/tracked_file.py").write_text(
+            "print('This is a tracked file in a folder.')", encoding="utf-8"
+        )
+
         # Stage and commit tracked files
         repo.index.add_all()
         repo.index.write()
@@ -65,6 +70,7 @@ def test_get_tracked_files(git_repo: Path):
     assert "untracked.log" not in tracked_files  # This file should remain untracked
     assert "ignored.log" not in tracked_files  # This file is ignored by .gitignore
     assert "ignored_folder/hidden.txt" not in tracked_files  # Ignored folder
+    assert "tracked_folder/tracked_file.py" in tracked_files
 
 
 def test_is_ignored_git(git_repo: Path):
@@ -98,6 +104,7 @@ def test_generate_tree_git(git_repo: Path):
     assert "untracked.log" not in tree  # Should be ignored
     assert "ignored.log" not in tree  # Should be ignored
     assert "ignored_folder" not in tree  # Should be ignored
+    assert "tracked_folder/tracked_file.py" in tree
 
 
 def test_collect_files_content_git(git_repo: Path):
@@ -112,6 +119,7 @@ def test_collect_files_content_git(git_repo: Path):
     assert "untracked.log" not in str(files)  # Not tracked, should be ignored
     assert "ignored.log" not in str(files)  # Should be ignored
     assert "ignored_folder/hidden.txt" not in str(files)  # Should be ignored
+    assert any("tracked_folder/tracked_file.py" in f for f in files)
 
 
 def test_cli_git(git_repo: Path):
@@ -126,3 +134,4 @@ def test_cli_git(git_repo: Path):
     assert "untracked.log" not in result.output  # Should be ignored
     assert "ignored.log" not in result.output  # Should be ignored
     assert "ignored_folder" not in result.output  # Should be ignored
+    assert "tracked_folder/tracked_file.py" in result.output

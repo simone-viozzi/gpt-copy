@@ -112,8 +112,12 @@ def is_ignored(
 
     # If using Git tracking, ignore files that are NOT tracked
     if tracked_files is not None:
+        if path.is_dir():
+            # Keep directories if they contain at least one tracked file
+            return not any(f.startswith(rel_path + "/") for f in tracked_files)
         return rel_path not in tracked_files
 
+    # Fall back to checking .gitignore rules
     for rule_path, spec in gitignore_specs.items():
         if spec.match_file(rel_path):
             return True
@@ -124,7 +128,7 @@ def is_ignored(
 def generate_tree(
     root_path: Path,
     gitignore_specs: dict[str, PathSpec],
-    tracked_files: set[str] | None,
+    tracked_files: set[str] | None = None,
 ) -> str:
     """Generate a textual tree representation of the folder structure."""
     print("Generating folder structure tree...", file=sys.stderr)
