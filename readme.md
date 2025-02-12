@@ -20,12 +20,12 @@ pip install -r requirements.txt
 ## Usage
 ### Basic Usage
 ```sh
-python concatenate_files.py /path/to/directory
+python gpt-copy /path/to/directory
 ```
 
 ### Save Output to a File
 ```sh
-python concatenate_files.py /path/to/directory -o output.md
+python gpt-copy /path/to/directory -o output.md
 ```
 
 ## How It Works
