@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "gpt_copy"
-version = "0.1.1"
+version = "0.1.2"
 description = "A script to concatenate files into a single structured stream."
 readme = "README.md"
 requires-python = ">=3.10"
@@ -31,4 +31,4 @@ dev = [
 where = ["src"]
 
 [project.scripts]
-gpt-copy = "concatenate_files:main"
+gpt-copy = "concatenate_files.concatenate_files:main"
