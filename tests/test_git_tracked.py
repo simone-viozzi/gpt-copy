@@ -3,7 +3,7 @@ import pytest
 from pathlib import Path
 import pygit2
 from click.testing import CliRunner
-from src.concatenate_files.concatenate_files import (
+from gpt_copy.gpt_copy import (
     get_tracked_files,
     is_ignored,
     main,

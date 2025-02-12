@@ -31,4 +31,4 @@ dev = [
 where = ["src"]
 
 [project.scripts]
-gpt-copy = "concatenate_files.concatenate_files:main"
+gpt-copy = "gpt_copy.gpt_copy:main"

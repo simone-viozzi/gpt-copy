@@ -5,7 +5,7 @@ from click.testing import CliRunner
 import pickle
 from collections.abc import Generator
 
-from src.concatenate_files.concatenate_files import (
+from gpt_copy.gpt_copy import (
     get_language_for_extension,
     generate_tree,
     collect_gitignore_specs,
