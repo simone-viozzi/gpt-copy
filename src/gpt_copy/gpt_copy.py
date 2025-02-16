@@ -11,52 +11,52 @@ from pathspec.patterns.gitwildmatch import GitWildMatchPattern
 from tqdm import tqdm
 
 
-def get_language_for_extension(file_ext: str) -> str | None:
+def is_binary_file(file_path: Path, blocksize: int = 1024) -> bool:
     """
-    Return the code fence language for a given file extension.
-    If not recognized, return None (so we know to skip).
+    Determine if a file is binary by reading a block of bytes.
+    Checks for null bytes and the ratio of non-text characters.
     """
-    extension_map = {
+    try:
+        with file_path.open("rb") as f:
+            chunk = f.read(blocksize)
+            if b"\0" in chunk:
+                return True
+            if not chunk:
+                return False
+            # Define acceptable text characters (printable ASCII + common whitespace)
+            text_chars = bytes(range(32, 127)) + b"\n\r\t\b"
+            non_text = sum(1 for byte in chunk if byte not in text_chars)
+            # If more than 30% of the bytes are non-text, consider it binary.
+            if (non_text / len(chunk)) > 0.30:
+                return True
+    except Exception:
+        # If we cannot read the file, assume it's binary to be safe.
+        return True
+    return False
+
+
+def infer_language(file_path: Path) -> str:
+    """
+    Infer a language hint from the file name or extension.
+    Returns a language string if we can confidently hint one (e.g. for 'Dockerfile'),
+    or an empty string otherwise.
+    """
+    # Special-case for Dockerfile (which has no extension)
+    if file_path.name.lower() == "dockerfile":
+        return "docker"
+    # Optionally, you could add a few common extensions here.
+    # For most files, returning an empty string lets the LLM decide.
+    minimal_map = {
         ".py": "python",
-        ".cpp": "cpp",
-        ".cc": "cpp",
-        ".cxx": "cpp",
-        ".h": "cpp",
-        ".hpp": "cpp",
-        ".md": "markdown",
         ".js": "javascript",
         ".ts": "typescript",
-        ".json": "json",
-        ".yml": "yaml",
-        ".yaml": "yaml",
-        ".sh": "bash",
-        ".bash": "bash",
-        ".java": "java",
-        ".cs": "csharp",
-        ".rb": "ruby",
-        ".go": "go",
-        ".php": "php",
+        ".cpp": "cpp",
+        ".c": "c",
         ".html": "html",
         ".css": "css",
-        ".txt": "plaintext",
-        ".rs": "rust",
-        ".toml": "toml",
-        ".xml": "xml",
-        ".kt": "kotlin",
-        ".swift": "swift",
-        ".tf": "hcl",
-        ".lua": "lua",
-        ".dockerfile": "dockerfile",
-        ".pest": "pest",
-        ".csv": "csv",
-        ".ini": "ini",
-        ".ijs": "jslang",
+        ".md": "markdown",
     }
-    # Special-case Dockerfile (if the file name is literally "Dockerfile")
-    if file_ext == "" and "Dockerfile" in extension_map:
-        return extension_map[".dockerfile"]
-
-    return extension_map.get(file_ext.lower(), None)
+    return minimal_map.get(file_path.suffix.lower(), "")
 
 
 def find_git_repo(path: Path) -> pygit2.Repository | None:
@@ -107,19 +107,26 @@ def is_ignored(
     root_path: Path,
     tracked_files: set[str] | None = None,
 ) -> bool:
-    """Check if a file is ignored based on Git tracked files or .gitignore rules."""
+    """
+    Check if a file is ignored.
+
+    - When Git-tracking info is available, that branch is used.
+    - Otherwise, .gitignore rules are applied.
+
+    (For directories, a trailing "/" is added so that patterns ending with "/"
+    match as expected.)
+    """
     rel_path = path.relative_to(root_path).as_posix()
 
-    # If using Git tracking, ignore files that are NOT tracked
     if tracked_files is not None:
         if path.is_dir():
-            # Keep directories if they contain at least one tracked file
             return not any(f.startswith(rel_path + "/") for f in tracked_files)
         return rel_path not in tracked_files
 
-    # Fall back to checking .gitignore rules
-    for rule_path, spec in gitignore_specs.items():
-        if spec.match_file(rel_path):
+    # When using .gitignore rules, for directories add a trailing slash.
+    rel_path_for_match = rel_path + "/" if path.is_dir() else rel_path
+    for spec in gitignore_specs.values():
+        if spec.match_file(rel_path_for_match):
             return True
 
     return False
@@ -162,10 +169,20 @@ def collect_files_content(
     output_file: str | None,
     tracked_files: set[str] | None = None,
 ) -> tuple[list[str], list[str]]:
-    """Collect file contents based on tracking and .gitignore rules."""
+    """
+    Collect the contents of text files (skipping binary files) based on ignore rules.
+
+    Every file that is not ignored and not binary is read and included in the output.
+    If a language hint can be inferred (via infer_language), it is used; otherwise,
+    the file is wrapped in a code fence with no language specifier.
+
+    Returns:
+      - A list of markdown-formatted sections for each file.
+      - A list of file paths (as strings) for which the file was skipped because it was binary.
+    """
     print("Collecting file contents...", file=sys.stderr)
-    file_sections = []
-    unrecognized_files = []
+    file_sections: list[str] = []
+    unrecognized_files: list[str] = []
 
     for dirpath, _, filenames in os.walk(root_path):
         for filename in filenames:
@@ -174,33 +191,35 @@ def collect_files_content(
             if is_ignored(full_file_path, gitignore_specs, root_path, tracked_files):
                 continue
 
+            # Avoid reprocessing the output file if it's in the same directory.
             if output_file and (full_file_path.name == Path(output_file).name):
                 continue
 
             rel_path = full_file_path.relative_to(root_path)
-            ext = full_file_path.suffix
-            language = get_language_for_extension(ext)
 
-            if language:
-                try:
-                    with full_file_path.open(
-                        "r", encoding="utf-8", errors="replace"
-                    ) as f:
-                        content = f.read()
-
-                    file_header = (
-                        f"## File: `{rel_path}`\n*(Relative Path: `{rel_path}`)*"
-                    )
-                    fenced_content = f"```{language}\n{content}\n```"
-                    section = f"{file_header}\n\n{fenced_content}\n\n---\n"
-                    file_sections.append(section)
-                except Exception as e:
-                    print(
-                        f"Skipping file {rel_path} due to read error: {e}",
-                        file=sys.stderr,
-                    )
-            else:
+            # Skip binary files.
+            if is_binary_file(full_file_path):
                 unrecognized_files.append(rel_path.as_posix())
+                continue
+
+            try:
+                with full_file_path.open("r", encoding="utf-8", errors="replace") as f:
+                    content = f.read()
+            except Exception as e:
+                print(
+                    f"Skipping file {rel_path} due to read error: {e}",
+                    file=sys.stderr,
+                )
+                continue
+
+            language = infer_language(full_file_path)
+            file_header = f"## File: `{rel_path}`\n*(Relative Path: `{rel_path}`)*"
+            if language:
+                fenced_content = f"```{language}\n{content}\n```"
+            else:
+                fenced_content = f"```\n{content}\n```"
+            section = f"{file_header}\n\n{fenced_content}\n\n---\n"
+            file_sections.append(section)
 
     return file_sections, unrecognized_files
 

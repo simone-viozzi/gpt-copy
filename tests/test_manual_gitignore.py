@@ -6,7 +6,7 @@ import pickle
 from collections.abc import Generator
 
 from gpt_copy.gpt_copy import (
-    get_language_for_extension,
+    infer_language,  # updated import
     generate_tree,
     collect_gitignore_specs,
     collect_files_content,
@@ -47,11 +47,15 @@ def temp_directory() -> Generator[Path, None, None]:
         yield root
 
 
-def test_get_language_for_extension():
-    """Test file extension to language mapping."""
-    assert get_language_for_extension(".py") == "python"
-    assert get_language_for_extension(".js") == "javascript"
-    assert get_language_for_extension(".unknown") is None
+def test_infer_language():
+    """Test language inference from filename or extension."""
+    # Special-case for Dockerfile
+    assert infer_language(Path("Dockerfile")) == "docker"
+    # Minimal mapping for common extensions
+    assert infer_language(Path("file.py")) == "python"
+    assert infer_language(Path("file.js")) == "javascript"
+    # Unknown extension should return an empty string
+    assert infer_language(Path("file.unknown")) == ""
 
 
 def test_generate_tree(temp_directory: Path):
@@ -60,7 +64,8 @@ def test_generate_tree(temp_directory: Path):
     tree = generate_tree(temp_directory, gitignore_specs, tracked_files=None)
 
     assert "file.py" in tree
-    assert "subdir" in tree
+    # Since the .gitignore in this fixture ignores subdir/, it should NOT appear in the tree.
+    assert "subdir" not in tree
     assert "file.txt" in tree
     assert "subdir/script.js" not in tree
     assert "image.png" not in tree
@@ -96,7 +101,9 @@ def test_collect_files_content(temp_directory: Path):
     files, unrecognized = collect_files_content(temp_directory, gitignore_specs, None)
 
     assert len(files) > 0
+    # Now, since we use infer_language, recognized files (like file.py) will be wrapped with a language hint.
     assert any("python" in f for f in files)
+    # Binary files (like document.pkl) should be listed as unrecognized.
     assert "document.pkl" in unrecognized
 
 
