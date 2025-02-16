@@ -61,8 +61,11 @@ def infer_language(file_path: Path) -> str:
 
 def find_git_repo(path: Path) -> pygit2.Repository | None:
     """Search for a Git repository in the given directory or its parents."""
+    repo_path = pygit2.discover_repository(path.as_posix())
+    if repo_path is None:
+        return None
     try:
-        return pygit2.Repository(path.resolve().as_posix())
+        return pygit2.Repository(Path(repo_path).parent.as_posix())
     except pygit2.GitError:
         return None
 
@@ -265,11 +268,40 @@ def write_output(
     help="Output file path (default: stdout)",
 )
 def main(root_path: Path, output_file: str | None) -> None:
+    # Ensure we have an absolute path so that relative comparisons work correctly.
+    root_path = root_path.resolve()
+
     print(f"Starting script for directory: {root_path}", file=sys.stderr)
 
     repo = find_git_repo(root_path)
-    tracked_files = get_tracked_files(repo) if repo else None
-    gitignore_specs = {} if repo else collect_gitignore_specs(root_path)
+    if repo:
+        repo_root = Path(repo.workdir)
+        all_tracked = get_tracked_files(
+            repo
+        )  # These paths are relative to the repository root.
+        try:
+            subfolder_relative = root_path.relative_to(repo_root)
+        except ValueError:
+            subfolder_relative = None
+
+        if subfolder_relative is not None:
+            new_tracked = set()
+            # Adjust tracked files: only include those under the provided subfolder,
+            # and rebase their paths relative to root_path.
+            for f in all_tracked:
+                file_path = Path(f)
+                try:
+                    rel_to_subfolder = file_path.relative_to(subfolder_relative)
+                    new_tracked.add(rel_to_subfolder.as_posix())
+                except ValueError:
+                    continue
+            tracked_files = new_tracked
+        else:
+            tracked_files = all_tracked
+        gitignore_specs = {}  # When using Git, we rely solely on tracked files.
+    else:
+        tracked_files = None
+        gitignore_specs = collect_gitignore_specs(root_path)
 
     tree_output = generate_tree(root_path, gitignore_specs, tracked_files)
     file_sections, unrecognized_files = collect_files_content(
@@ -289,7 +321,3 @@ def main(root_path: Path, output_file: str | None) -> None:
             "Some files were not recognized and were skipped. See 'Unrecognized Files' section.",
             file=sys.stderr,
         )
-
-
-if __name__ == "__main__":
-    main()
