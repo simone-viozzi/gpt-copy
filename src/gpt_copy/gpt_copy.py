@@ -17,6 +17,13 @@ def is_binary_file(file_path: Path, blocksize: int = 1024) -> bool:
     """
     Determine if a file is binary by reading a block of bytes.
     Checks for null bytes and the ratio of non-text characters.
+
+    Args:
+        file_path (Path): The path to the file.
+        blocksize (int): The number of bytes to read for checking. Default is 1024.
+
+    Returns:
+        bool: True if the file is binary, False otherwise.
     """
     try:
         with file_path.open("rb") as f:
@@ -37,6 +44,12 @@ def is_binary_file(file_path: Path, blocksize: int = 1024) -> bool:
 def infer_language(file_path: Path) -> str:
     """
     Infer a language hint from the file name or extension.
+
+    Args:
+        file_path (Path): The path to the file.
+
+    Returns:
+        str: The inferred language hint.
     """
     if file_path.name.lower() == "dockerfile":
         return "docker"
@@ -54,6 +67,15 @@ def infer_language(file_path: Path) -> str:
 
 
 def find_git_repo(path: Path) -> pygit2.Repository | None:
+    """
+    Find the git repository for the given path.
+
+    Args:
+        path (Path): The path to search for a git repository.
+
+    Returns:
+        Optional[pygit2.Repository]: The found git repository or None if not found.
+    """
     repo_path = pygit2.discover_repository(path.as_posix())
     if repo_path is None:
         return None
@@ -64,12 +86,31 @@ def find_git_repo(path: Path) -> pygit2.Repository | None:
 
 
 def get_tracked_files(repo: pygit2.Repository) -> set[str]:
+    """
+    Get the set of tracked files in the given git repository.
+
+    Args:
+        repo (pygit2.Repository): The git repository.
+
+    Returns:
+        Set[str]: A set of tracked file paths.
+    """
     return {entry.path for entry in repo.index}
 
 
 def get_ignore_settings(
     root_path: Path, force: bool
 ) -> tuple[dict[str, PathSpec], set[str] | None]:
+    """
+    Get the ignore settings based on .gitignore files and git-tracked files.
+
+    Args:
+        root_path (Path): The root path to start searching.
+        force (bool): If True, ignore .gitignore and git-tracked files.
+
+    Returns:
+        Tuple[Dict[str, PathSpec], Optional[Set[str]]]: A tuple containing the gitignore specs and tracked files.
+    """
     if force:
         return {}, None
 
@@ -100,6 +141,15 @@ def get_ignore_settings(
 
 
 def collect_gitignore_specs(root_path: Path) -> dict[str, PathSpec]:
+    """
+    Collect .gitignore specifications for each directory.
+
+    Args:
+        root_path (Path): The root path to start searching.
+
+    Returns:
+        Dict[str, PathSpec]: A dictionary mapping directory paths to PathSpec objects.
+    """
     print("Collecting .gitignore rules per directory...", file=sys.stderr)
     gitignore_specs = {}
 
@@ -132,6 +182,18 @@ def is_ignored(
     root_path: Path,
     tracked_files: set[str] | None = None,
 ) -> bool:
+    """
+    Check if a path is ignored based on gitignore specs and tracked files.
+
+    Args:
+        path (Path): The path to check.
+        gitignore_specs (Dict[str, PathSpec]): The gitignore specifications.
+        root_path (Path): The root path.
+        tracked_files (Optional[Set[str]]): The set of tracked files.
+
+    Returns:
+        bool: True if the path is ignored, False otherwise.
+    """
     rel_path = path.relative_to(root_path).as_posix()
 
     if tracked_files is not None:
@@ -152,6 +214,17 @@ def generate_tree(
     gitignore_specs: dict[str, PathSpec],
     tracked_files: set[str] | None = None,
 ) -> str:
+    """
+    Generate a folder structure tree.
+
+    Args:
+        root_path (Path): The root path to start generating the tree.
+        gitignore_specs (Dict[str, PathSpec]): The gitignore specifications.
+        tracked_files (Optional[Set[str]]): The set of tracked files.
+
+    Returns:
+        str: The generated folder structure tree.
+    """
     print("Generating folder structure tree...", file=sys.stderr)
     tree_lines = [root_path.name or str(root_path)]
 
@@ -188,6 +261,17 @@ def collect_files_content(
     """
     Collect the contents of text files (skipping binary files) based on ignore rules
     and the include/exclude glob patterns.
+
+    Args:
+        root_path (Path): The root path to start collecting files.
+        gitignore_specs (Dict[str, PathSpec]): The gitignore specifications.
+        output_file (Optional[str]): The output file path.
+        tracked_files (Optional[Set[str]]): The set of tracked files.
+        include_patterns (Optional[List[str]]): The list of include glob patterns.
+        exclude_patterns (Optional[List[str]]): The list of exclude glob patterns.
+
+    Returns:
+        Tuple[List[str], List[str]]: A tuple containing the file sections and unrecognized files.
     """
     print("Collecting file contents...", file=sys.stderr)
     file_sections: list[str] = []
@@ -245,7 +329,15 @@ def write_output(
     file_sections: list[str],
     unrecognized_files: list[str],
 ) -> None:
-    """Write collected outputs to the specified output (file or stdout)."""
+    """
+    Write collected outputs to the specified output (file or stdout).
+
+    Args:
+        output (TextIO): The output stream.
+        tree_output (str): The generated folder structure tree.
+        file_sections (List[str]): The collected file sections.
+        unrecognized_files (List[str]): The list of unrecognized files.
+    """
     output.write("# Folder Structure\n\n```\n")
     output.write(tree_output)
     output.write("\n```\n\n")
@@ -306,6 +398,16 @@ def main(
     include_patterns: tuple[str, ...],
     exclude_patterns: tuple[str, ...],
 ) -> None:
+    """
+    Main function to start the script.
+
+    Args:
+        root_path (Path): The root path to start processing.
+        output_file (Optional[str]): The output file path.
+        force (bool): If True, ignore .gitignore and git-tracked files.
+        include_patterns (Tuple[str, ...]): The tuple of include glob patterns.
+        exclude_patterns (Tuple[str, ...]): The tuple of exclude glob patterns.
+    """
     root_path = root_path.resolve()
     print(f"Starting script for directory: {root_path}", file=sys.stderr)
     gitignore_specs, tracked_files = get_ignore_settings(root_path, force)
