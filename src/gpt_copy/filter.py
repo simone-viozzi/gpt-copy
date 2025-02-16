@@ -1,5 +1,3 @@
-# File: src/gpt_copy/filter.py
-
 import re
 import fnmatch
 
