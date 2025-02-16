@@ -75,6 +75,50 @@ def get_tracked_files(repo: pygit2.Repository) -> set[str]:
     return {entry.path for entry in repo.index}
 
 
+def get_ignore_settings(
+    root_path: Path, force: bool
+) -> tuple[dict[str, PathSpec], set[str] | None]:
+    """
+    Determine the ignore settings based on the presence of a Git repository and the force flag.
+
+    Args:
+        root_path (Path): The directory to scan.
+        force (bool): If True, ignore Git and .gitignore rules.
+
+    Returns:
+        tuple: A tuple (gitignore_specs, tracked_files) where:
+            - gitignore_specs is a dictionary of PathSpec objects (empty when using Git or when force is True).
+            - tracked_files is a set of tracked file paths (or None when not using Git).
+    """
+    if force:
+        return {}, None
+
+    repo = find_git_repo(root_path)
+    if repo:
+        repo_root = Path(repo.workdir)
+        all_tracked = get_tracked_files(repo)
+        try:
+            subfolder_relative = root_path.relative_to(repo_root)
+        except ValueError:
+            subfolder_relative = None
+
+        if subfolder_relative is not None:
+            new_tracked = set()
+            for f in all_tracked:
+                file_path = Path(f)
+                try:
+                    rel_to_subfolder = file_path.relative_to(subfolder_relative)
+                    new_tracked.add(rel_to_subfolder.as_posix())
+                except ValueError:
+                    continue
+            tracked_files = new_tracked
+        else:
+            tracked_files = all_tracked
+        return {}, tracked_files
+    else:
+        return collect_gitignore_specs(root_path), None
+
+
 def collect_gitignore_specs(root_path: Path) -> dict[str, PathSpec]:
     """Traverse directories and build a dictionary of PathSpec objects for .gitignore rules."""
     print("Collecting .gitignore rules per directory...", file=sys.stderr)
@@ -267,41 +311,20 @@ def write_output(
     default=None,
     help="Output file path (default: stdout)",
 )
-def main(root_path: Path, output_file: str | None) -> None:
+@click.option(
+    "-f",
+    "--force",
+    is_flag=True,
+    help="Force generation: ignore .gitignore and Git-tracked files",
+)
+def main(root_path: Path, output_file: str | None, force: bool) -> None:
     # Ensure we have an absolute path so that relative comparisons work correctly.
     root_path = root_path.resolve()
 
     print(f"Starting script for directory: {root_path}", file=sys.stderr)
 
-    repo = find_git_repo(root_path)
-    if repo:
-        repo_root = Path(repo.workdir)
-        all_tracked = get_tracked_files(
-            repo
-        )  # These paths are relative to the repository root.
-        try:
-            subfolder_relative = root_path.relative_to(repo_root)
-        except ValueError:
-            subfolder_relative = None
-
-        if subfolder_relative is not None:
-            new_tracked = set()
-            # Adjust tracked files: only include those under the provided subfolder,
-            # and rebase their paths relative to root_path.
-            for f in all_tracked:
-                file_path = Path(f)
-                try:
-                    rel_to_subfolder = file_path.relative_to(subfolder_relative)
-                    new_tracked.add(rel_to_subfolder.as_posix())
-                except ValueError:
-                    continue
-            tracked_files = new_tracked
-        else:
-            tracked_files = all_tracked
-        gitignore_specs = {}  # When using Git, we rely solely on tracked files.
-    else:
-        tracked_files = None
-        gitignore_specs = collect_gitignore_specs(root_path)
+    # Determine ignore settings based on the force flag and repository presence.
+    gitignore_specs, tracked_files = get_ignore_settings(root_path, force)
 
     tree_output = generate_tree(root_path, gitignore_specs, tracked_files)
     file_sections, unrecognized_files = collect_files_content(
