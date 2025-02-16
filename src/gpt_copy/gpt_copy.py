@@ -10,6 +10,8 @@ from pathspec import PathSpec
 from pathspec.patterns.gitwildmatch import GitWildMatchPattern
 from tqdm import tqdm
 
+from gpt_copy.filter import should_include_file
+
 
 def is_binary_file(file_path: Path, blocksize: int = 1024) -> bool:
     """
@@ -23,14 +25,11 @@ def is_binary_file(file_path: Path, blocksize: int = 1024) -> bool:
                 return True
             if not chunk:
                 return False
-            # Define acceptable text characters (printable ASCII + common whitespace)
             text_chars = bytes(range(32, 127)) + b"\n\r\t\b"
             non_text = sum(1 for byte in chunk if byte not in text_chars)
-            # If more than 30% of the bytes are non-text, consider it binary.
             if (non_text / len(chunk)) > 0.30:
                 return True
     except Exception:
-        # If we cannot read the file, assume it's binary to be safe.
         return True
     return False
 
@@ -38,14 +37,9 @@ def is_binary_file(file_path: Path, blocksize: int = 1024) -> bool:
 def infer_language(file_path: Path) -> str:
     """
     Infer a language hint from the file name or extension.
-    Returns a language string if we can confidently hint one (e.g. for 'Dockerfile'),
-    or an empty string otherwise.
     """
-    # Special-case for Dockerfile (which has no extension)
     if file_path.name.lower() == "dockerfile":
         return "docker"
-    # Optionally, you could add a few common extensions here.
-    # For most files, returning an empty string lets the LLM decide.
     minimal_map = {
         ".py": "python",
         ".js": "javascript",
@@ -60,7 +54,6 @@ def infer_language(file_path: Path) -> str:
 
 
 def find_git_repo(path: Path) -> pygit2.Repository | None:
-    """Search for a Git repository in the given directory or its parents."""
     repo_path = pygit2.discover_repository(path.as_posix())
     if repo_path is None:
         return None
@@ -71,25 +64,12 @@ def find_git_repo(path: Path) -> pygit2.Repository | None:
 
 
 def get_tracked_files(repo: pygit2.Repository) -> set[str]:
-    """Returns a set of all tracked files in the repository."""
     return {entry.path for entry in repo.index}
 
 
 def get_ignore_settings(
     root_path: Path, force: bool
 ) -> tuple[dict[str, PathSpec], set[str] | None]:
-    """
-    Determine the ignore settings based on the presence of a Git repository and the force flag.
-
-    Args:
-        root_path (Path): The directory to scan.
-        force (bool): If True, ignore Git and .gitignore rules.
-
-    Returns:
-        tuple: A tuple (gitignore_specs, tracked_files) where:
-            - gitignore_specs is a dictionary of PathSpec objects (empty when using Git or when force is True).
-            - tracked_files is a set of tracked file paths (or None when not using Git).
-    """
     if force:
         return {}, None
 
@@ -120,7 +100,6 @@ def get_ignore_settings(
 
 
 def collect_gitignore_specs(root_path: Path) -> dict[str, PathSpec]:
-    """Traverse directories and build a dictionary of PathSpec objects for .gitignore rules."""
     print("Collecting .gitignore rules per directory...", file=sys.stderr)
     gitignore_specs = {}
 
@@ -129,13 +108,12 @@ def collect_gitignore_specs(root_path: Path) -> dict[str, PathSpec]:
     ):
         dirpath = Path(dirpath)
         rel_path = dirpath.relative_to(root_path)
-
         gitignore_file = dirpath / ".gitignore"
         if gitignore_file.exists():
             try:
                 with gitignore_file.open("r", encoding="utf-8") as f:
                     patterns = f.read().splitlines()
-                patterns.append(".git/")  # Always ignore .git/
+                patterns.append(".git/")
                 gitignore_specs[rel_path.as_posix()] = PathSpec.from_lines(
                     GitWildMatchPattern, patterns
                 )
@@ -154,15 +132,6 @@ def is_ignored(
     root_path: Path,
     tracked_files: set[str] | None = None,
 ) -> bool:
-    """
-    Check if a file is ignored.
-
-    - When Git-tracking info is available, that branch is used.
-    - Otherwise, .gitignore rules are applied.
-
-    (For directories, a trailing "/" is added so that patterns ending with "/"
-    match as expected.)
-    """
     rel_path = path.relative_to(root_path).as_posix()
 
     if tracked_files is not None:
@@ -170,7 +139,6 @@ def is_ignored(
             return not any(f.startswith(rel_path + "/") for f in tracked_files)
         return rel_path not in tracked_files
 
-    # When using .gitignore rules, for directories add a trailing slash.
     rel_path_for_match = rel_path + "/" if path.is_dir() else rel_path
     for spec in gitignore_specs.values():
         if spec.match_file(rel_path_for_match):
@@ -184,7 +152,6 @@ def generate_tree(
     gitignore_specs: dict[str, PathSpec],
     tracked_files: set[str] | None = None,
 ) -> str:
-    """Generate a textual tree representation of the folder structure."""
     print("Generating folder structure tree...", file=sys.stderr)
     tree_lines = [root_path.name or str(root_path)]
 
@@ -214,22 +181,21 @@ def collect_files_content(
     root_path: Path,
     gitignore_specs: dict[str, PathSpec],
     output_file: str | None,
-    tracked_files: set[str] | None = None,
+    tracked_files: set[str] | None,
+    include_patterns: list[str] | None = None,
+    exclude_patterns: list[str] | None = None,
 ) -> tuple[list[str], list[str]]:
     """
-    Collect the contents of text files (skipping binary files) based on ignore rules.
-
-    Every file that is not ignored and not binary is read and included in the output.
-    If a language hint can be inferred (via infer_language), it is used; otherwise,
-    the file is wrapped in a code fence with no language specifier.
-
-    Returns:
-      - A list of markdown-formatted sections for each file.
-      - A list of file paths (as strings) for which the file was skipped because it was binary.
+    Collect the contents of text files (skipping binary files) based on ignore rules
+    and the include/exclude glob patterns.
     """
     print("Collecting file contents...", file=sys.stderr)
     file_sections: list[str] = []
     unrecognized_files: list[str] = []
+
+    # Ensure include/exclude are lists.
+    include_patterns = include_patterns or []
+    exclude_patterns = exclude_patterns or []
 
     for dirpath, _, filenames in os.walk(root_path):
         for filename in filenames:
@@ -238,15 +204,18 @@ def collect_files_content(
             if is_ignored(full_file_path, gitignore_specs, root_path, tracked_files):
                 continue
 
-            # Avoid reprocessing the output file if it's in the same directory.
+            # Avoid reprocessing the output file.
             if output_file and (full_file_path.name == Path(output_file).name):
                 continue
 
-            rel_path = full_file_path.relative_to(root_path)
+            rel_path = full_file_path.relative_to(root_path).as_posix()
 
-            # Skip binary files.
+            # Apply include/exclude filters.
+            if not should_include_file(rel_path, include_patterns, exclude_patterns):
+                continue
+
             if is_binary_file(full_file_path):
-                unrecognized_files.append(rel_path.as_posix())
+                unrecognized_files.append(rel_path)
                 continue
 
             try:
@@ -261,10 +230,9 @@ def collect_files_content(
 
             language = infer_language(full_file_path)
             file_header = f"## File: `{rel_path}`\n*(Relative Path: `{rel_path}`)*"
-            if language:
-                fenced_content = f"```{language}\n{content}\n```"
-            else:
-                fenced_content = f"```\n{content}\n```"
+            fenced_content = (
+                f"```{language}\n{content}\n```" if language else f"```\n{content}\n```"
+            )
             section = f"{file_header}\n\n{fenced_content}\n\n---\n"
             file_sections.append(section)
 
@@ -317,18 +285,38 @@ def write_output(
     is_flag=True,
     help="Force generation: ignore .gitignore and Git-tracked files",
 )
-def main(root_path: Path, output_file: str | None, force: bool) -> None:
-    # Ensure we have an absolute path so that relative comparisons work correctly.
+@click.option(
+    "-i",
+    "--include",
+    "include_patterns",
+    multiple=True,
+    help="Glob pattern(s) to include files (e.g., 'src/*.py', 'src/{module1,module2}.py')",
+)
+@click.option(
+    "-e",
+    "--exclude",
+    "exclude_patterns",
+    multiple=True,
+    help="Glob pattern(s) to exclude files (e.g., 'src/tests/*')",
+)
+def main(
+    root_path: Path,
+    output_file: str | None,
+    force: bool,
+    include_patterns: tuple[str, ...],
+    exclude_patterns: tuple[str, ...],
+) -> None:
     root_path = root_path.resolve()
-
     print(f"Starting script for directory: {root_path}", file=sys.stderr)
-
-    # Determine ignore settings based on the force flag and repository presence.
     gitignore_specs, tracked_files = get_ignore_settings(root_path, force)
-
     tree_output = generate_tree(root_path, gitignore_specs, tracked_files)
     file_sections, unrecognized_files = collect_files_content(
-        root_path, gitignore_specs, output_file, tracked_files
+        root_path,
+        gitignore_specs,
+        output_file,
+        tracked_files,
+        include_patterns=list(include_patterns),
+        exclude_patterns=list(exclude_patterns),
     )
 
     if output_file:
