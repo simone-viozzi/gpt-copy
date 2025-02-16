@@ -107,19 +107,26 @@ def is_ignored(
     root_path: Path,
     tracked_files: set[str] | None = None,
 ) -> bool:
-    """Check if a file is ignored based on Git tracked files or .gitignore rules."""
+    """
+    Check if a file is ignored.
+
+    - When Git-tracking info is available, that branch is used.
+    - Otherwise, .gitignore rules are applied.
+
+    (For directories, a trailing "/" is added so that patterns ending with "/"
+    match as expected.)
+    """
     rel_path = path.relative_to(root_path).as_posix()
 
-    # If using Git tracking, ignore files that are NOT tracked
     if tracked_files is not None:
         if path.is_dir():
-            # Keep directories if they contain at least one tracked file
             return not any(f.startswith(rel_path + "/") for f in tracked_files)
         return rel_path not in tracked_files
 
-    # Fall back to checking .gitignore rules
-    for rule_path, spec in gitignore_specs.items():
-        if spec.match_file(rel_path):
+    # When using .gitignore rules, for directories add a trailing slash.
+    rel_path_for_match = rel_path + "/" if path.is_dir() else rel_path
+    for spec in gitignore_specs.values():
+        if spec.match_file(rel_path_for_match):
             return True
 
     return False
@@ -163,10 +170,15 @@ def collect_files_content(
     tracked_files: set[str] | None = None,
 ) -> tuple[list[str], list[str]]:
     """
-    Collect the contents of files that are not ignored, skipping binary files.
+    Collect the contents of text files (skipping binary files) based on ignore rules.
+
+    Every file that is not ignored and not binary is read and included in the output.
+    If a language hint can be inferred (via infer_language), it is used; otherwise,
+    the file is wrapped in a code fence with no language specifier.
+
     Returns:
-      - A list of markdown-formatted file sections for recognized text files.
-      - A list of file paths (as strings) that were skipped (e.g. binary files or files without a reliable language hint).
+      - A list of markdown-formatted sections for each file.
+      - A list of file paths (as strings) for which the file was skipped because it was binary.
     """
     print("Collecting file contents...", file=sys.stderr)
     file_sections: list[str] = []
@@ -179,34 +191,35 @@ def collect_files_content(
             if is_ignored(full_file_path, gitignore_specs, root_path, tracked_files):
                 continue
 
-            # Avoid processing the output file if it's in the same directory.
+            # Avoid reprocessing the output file if it's in the same directory.
             if output_file and (full_file_path.name == Path(output_file).name):
                 continue
 
             rel_path = full_file_path.relative_to(root_path)
 
-            # Skip binary files using robust detection.
+            # Skip binary files.
             if is_binary_file(full_file_path):
                 unrecognized_files.append(rel_path.as_posix())
                 continue
 
-            # Infer a language hint if possible.
-            language = infer_language(full_file_path)
             try:
                 with full_file_path.open("r", encoding="utf-8", errors="replace") as f:
                     content = f.read()
-                file_header = f"## File: `{rel_path}`\n*(Relative Path: `{rel_path}`)*"
-                if language:
-                    fenced_content = f"```{language}\n{content}\n```"
-                else:
-                    fenced_content = f"```\n{content}\n```"
-                section = f"{file_header}\n\n{fenced_content}\n\n---\n"
-                file_sections.append(section)
             except Exception as e:
                 print(
                     f"Skipping file {rel_path} due to read error: {e}",
                     file=sys.stderr,
                 )
+                continue
+
+            language = infer_language(full_file_path)
+            file_header = f"## File: `{rel_path}`\n*(Relative Path: `{rel_path}`)*"
+            if language:
+                fenced_content = f"```{language}\n{content}\n```"
+            else:
+                fenced_content = f"```\n{content}\n```"
+            section = f"{file_header}\n\n{fenced_content}\n\n---\n"
+            file_sections.append(section)
 
     return file_sections, unrecognized_files
 
