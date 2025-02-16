@@ -98,7 +98,9 @@ def test_is_ignored(temp_directory: Path):
 def test_collect_files_content(temp_directory: Path):
     """Ensure files are correctly collected and recognized."""
     gitignore_specs = collect_gitignore_specs(temp_directory)
-    files, unrecognized = collect_files_content(temp_directory, gitignore_specs, None)
+    files, unrecognized = collect_files_content(
+        temp_directory, gitignore_specs, None, None
+    )
 
     assert len(files) > 0
     # Now, since we use infer_language, recognized files (like file.py) will be wrapped with a language hint.
