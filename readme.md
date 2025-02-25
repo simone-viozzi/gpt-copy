@@ -18,6 +18,11 @@ Ensure you have Python 3 installed. You can install dependencies using:
 pip install -r requirements.txt
 ```
 
+Alternatively, install directly from Git:
+```sh
+pip install git+https://github.com/simone-viozzi/gpt-copy.git
+```
+
 ## Usage
 ### Basic Usage
 ```sh
