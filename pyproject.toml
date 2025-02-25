@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "gpt_copy"
-version = "2.0.0"
+version = "2.1.0"
 description = "A script to concatenate files into a single structured stream."
 readme = "README.md"
 requires-python = ">=3.10"
@@ -17,7 +17,8 @@ dependencies = [
     "click",
     "pathspec",
     "tqdm",
-    "pygit2"
+    "pygit2",
+    "tiktoken"
 ]
 
 [project.optional-dependencies]
@@ -32,3 +33,4 @@ where = ["src"]
 
 [project.scripts]
 gpt-copy = "gpt_copy.gpt_copy:main"
+tokens = "gpt_copy.tokens:main"
