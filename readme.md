@@ -1,4 +1,3 @@
-
 # GPT Copy
 
 ## Overview
@@ -22,12 +21,12 @@ pip install -r requirements.txt
 ## Usage
 ### Basic Usage
 ```sh
-python gpt-copy /path/to/directory
+gpt-copy /path/to/directory
 ```
 
 ### Save Output to a File
 ```sh
-python gpt-copy /path/to/directory -o output.md
+gpt-copy /path/to/directory -o output.md
 ```
 
 ### Advanced File Filtering
@@ -39,11 +38,11 @@ You can fine-tune which files are processed using two new options:
   **Examples:**
   - Include all Python files in the `src` folder:
     ```sh
-    python gpt-copy /path/to/directory -i "src/*.py"
+    gpt-copy /path/to/directory -i "src/*.py"
     ```
   - Include specific modules using brace expansion:
     ```sh
-    python gpt-copy /path/to/directory -i "src/{module1,module2}.py"
+    gpt-copy /path/to/directory -i "src/{module1,module2}.py"
     ```
 
 - **Exclude Files (`-e` or `--exclude`):**
@@ -52,11 +51,11 @@ You can fine-tune which files are processed using two new options:
   **Examples:**
   - Exclude all files in the `tests` folder:
     ```sh
-    python gpt-copy /path/to/directory -e "tests/*"
+    gpt-copy /path/to/directory -e "tests/*"
     ```
   - Exclude a specific file even if it is included by another pattern:
     ```sh
-    python gpt-copy /path/to/directory -i "src/*.py" -e "src/__init__.py"
+    gpt-copy /path/to/directory -i "src/*.py" -e "src/__init__.py"
     ```
 
 ### Force Mode (`-f` or `--force`)
@@ -64,7 +63,7 @@ The `-f` (or `--force`) option forces the script to ignore `.gitignore` rules an
 
 **Usage Example:**
 ```sh
-python gpt-copy /path/to/directory -f
+gpt-copy /path/to/directory -f
 ```
 
 ## How It Works
