@@ -1,5 +1,5 @@
 
-# Concatenate Files
+# GPT Copy
 
 ## Overview
 This script recursively scans a directory, collects readable files, and concatenates them into a single structured stream. The output can be printed to stdout or written to a file. The purpose is to provide an easy way to feed structured content (such as codebases, documentation, or notes) into language models like GPT.
