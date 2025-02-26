@@ -9,7 +9,8 @@ This script recursively scans a directory, collects readable files, and concaten
 - Identifies file types based on extensions and formats content accordingly.
 - Excludes binary and ignored files.
 - Outputs structured markdown with file-specific code fences.
-- **New!** Supports filtering files using glob-style include and exclude patterns.
+- Supports filtering files using glob-style include and exclude patterns.
+- Includes a `tokens` CLI command to count the number of tokens in text using OpenAI's `tiktoken` library with the GPT-4o model encoding.
 
 ## Installation
 Ensure you have Python 3 installed. You can install dependencies using:
@@ -24,6 +25,7 @@ pip install git+https://github.com/simone-viozzi/gpt-copy.git
 ```
 
 ## Usage
+
 ### Basic Usage
 ```sh
 gpt-copy /path/to/directory
@@ -71,6 +73,19 @@ The `-f` (or `--force`) option forces the script to ignore `.gitignore` rules an
 gpt-copy /path/to/directory -f
 ```
 
+### Count Tokens with `tokens`
+A new command, `tokens`, has been added to count the number of tokens in a given text using the `tiktoken` library with the GPT-4o model encoding. This command can read text from a file or from standard input, making it easy to pipe the output of `gpt-copy` into it.
+
+**Examples:**
+- Count tokens in a file:
+  ```sh
+  tokens file.txt
+  ```
+- Pipe the output of `gpt-copy` into `tokens`:
+  ```sh
+  gpt-copy /path/to/directory | tokens
+  ```
+
 ## How It Works
 1. **Collects `.gitignore` Rules**
    - Scans the directory for `.gitignore` files and applies rules accordingly.
@@ -104,14 +119,14 @@ project_root
 
 ## File Contents
 
-## File: `main.py`
+### File: `main.py`
 *(Relative Path: `main.py`)*
 
 ```python
 print("Hello, World!")
 ```
 
-## File: `config.yaml`
+### File: `config.yaml`
 *(Relative Path: `subdir/config.yaml`)*
 
 ```yaml
