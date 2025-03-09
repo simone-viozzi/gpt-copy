@@ -13,6 +13,29 @@ from tqdm import tqdm
 from gpt_copy.filter import should_include_file
 
 
+def add_line_numbers(text: str) -> str:
+    """
+    Add line numbers to each line of the given text.
+    Line numbers are padded with zeros based on the total number of lines.
+
+    For example, if the file has 120 lines, the first line will be "001: <line content>".
+
+    Args:
+        text (str): The original text.
+
+    Returns:
+        str: The text with line numbers added.
+    """
+    lines = text.splitlines()
+    if not lines:
+        return text
+    width = len(str(len(lines)))
+    numbered_lines = [
+        f"{str(i+1).zfill(width)}: {line}" for i, line in enumerate(lines)
+    ]
+    return "\n".join(numbered_lines)
+
+
 def is_binary_file(file_path: Path, blocksize: int = 1024) -> bool:
     """
     Determine if a file is binary by reading a block of bytes.
@@ -257,6 +280,7 @@ def collect_files_content(
     tracked_files: set[str] | None,
     include_patterns: list[str] | None = None,
     exclude_patterns: list[str] | None = None,
+    line_numbers: bool = False,
 ) -> tuple[list[str], list[str]]:
     """
     Collect the contents of text files (skipping binary files) based on ignore rules
@@ -269,6 +293,7 @@ def collect_files_content(
         tracked_files (Optional[Set[str]]): The set of tracked files.
         include_patterns (Optional[List[str]]): The list of include glob patterns.
         exclude_patterns (Optional[List[str]]): The list of exclude glob patterns.
+        line_numbers (bool): If True, adds line numbers to file contents.
 
     Returns:
         Tuple[List[str], List[str]]: A tuple containing the file sections and unrecognized files.
@@ -311,6 +336,10 @@ def collect_files_content(
                     file=sys.stderr,
                 )
                 continue
+
+            # Add line numbers if the option is enabled.
+            if line_numbers:
+                content = add_line_numbers(content)
 
             language = infer_language(full_file_path)
             file_header = f"## File: `{rel_path}`\n*(Relative Path: `{rel_path}`)*"
@@ -391,12 +420,20 @@ def write_output(
     multiple=True,
     help="Glob pattern(s) to exclude files (e.g., 'src/tests/*')",
 )
+@click.option(
+    "-n",
+    "--number",
+    "line_numbers",
+    is_flag=True,
+    help="Add line numbers to file content.",
+)
 def main(
     root_path: Path,
     output_file: str | None,
     force: bool,
     include_patterns: tuple[str, ...],
     exclude_patterns: tuple[str, ...],
+    line_numbers: bool,
 ) -> None:
     """
     Main function to start the script.
@@ -404,9 +441,10 @@ def main(
     Args:
         root_path (Path): The root path to start processing.
         output_file (Optional[str]): The output file path.
-        force (bool): If True, ignore .gitignore and git-tracked files.
+        force (bool): If True, ignore .gitignore and Git-tracked files.
         include_patterns (Tuple[str, ...]): The tuple of include glob patterns.
         exclude_patterns (Tuple[str, ...]): The tuple of exclude glob patterns.
+        line_numbers (bool): If True, add line numbers to the file contents.
     """
     root_path = root_path.resolve()
     print(f"Starting script for directory: {root_path}", file=sys.stderr)
@@ -419,6 +457,7 @@ def main(
         tracked_files,
         include_patterns=list(include_patterns),
         exclude_patterns=list(exclude_patterns),
+        line_numbers=line_numbers,
     )
 
     if output_file:
