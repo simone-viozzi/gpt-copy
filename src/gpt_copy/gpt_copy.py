@@ -64,6 +64,90 @@ def is_binary_file(file_path: Path, blocksize: int = 1024) -> bool:
     return False
 
 
+def _get_visible_entries(
+    dir_path: Path,
+    gitignore_specs: dict[str, PathSpec],
+    root_path: Path,
+    tracked_files: set[str] | None,
+) -> list[Path]:
+    """
+    Return a sorted list of entries in dir_path that are not gitignored.
+    """
+    try:
+        entries = sorted(dir_path.iterdir())
+    except OSError as e:
+        print(f"Warning: cannot list {dir_path} due to error: {e}", file=sys.stderr)
+        return []
+    return [
+        entry
+        for entry in entries
+        if not is_ignored(entry, gitignore_specs, root_path, tracked_files)
+    ]
+
+
+def _compress_directory(
+    dir_path: Path,
+    gitignore_specs: dict[str, PathSpec],
+    root_path: Path,
+    tracked_files: set[str] | None,
+    prefix: str,
+    max_items: int = 3,
+) -> list[str]:
+    """
+    Return a list of tree lines for a compressed view of an excluded directory.
+    It shows up to max_items immediate children followed by an ellipsis if there are more.
+    """
+    lines = []
+    try:
+        children = sorted(dir_path.iterdir())
+    except OSError as e:
+        print(f"Warning: cannot list {dir_path} due to error: {e}", file=sys.stderr)
+        return lines
+
+    # Filter out gitignored children.
+    children = [
+        child
+        for child in children
+        if not is_ignored(child, gitignore_specs, root_path, tracked_files)
+    ]
+    count = 0
+    for child in children:
+        if count >= max_items:
+            lines.append(prefix + "[...]")
+            break
+        # Using a simple connector since no recursive expansion is needed.
+        lines.append(prefix + "└── " + child.name)
+        count += 1
+    return lines
+
+
+def _process_file(
+    full_file_path: Path, root_path: Path, line_numbers: bool
+) -> tuple[str, str]:
+    """
+    Process a single file to read its content, optionally add line numbers,
+    and return its relative path and a markdown section.
+    """
+    rel_path = full_file_path.relative_to(root_path).as_posix()
+    try:
+        with full_file_path.open("r", encoding="utf-8", errors="replace") as f:
+            content = f.read()
+    except Exception as e:
+        print(f"Skipping file {rel_path} due to read error: {e}", file=sys.stderr)
+        return "", ""
+
+    if line_numbers:
+        content = add_line_numbers(content)
+
+    language = infer_language(full_file_path)
+    file_header = f"## File: `{rel_path}`\n*(Relative Path: `{rel_path}`)*"
+    fenced_content = (
+        f"```{language}\n{content}\n```" if language else f"```\n{content}\n```"
+    )
+    section = f"{file_header}\n\n{fenced_content}\n\n---\n"
+    return rel_path, section
+
+
 def infer_language(file_path: Path) -> str:
     """
     Infer a language hint from the file name or extension.
@@ -176,9 +260,7 @@ def collect_gitignore_specs(root_path: Path) -> dict[str, PathSpec]:
     print("Collecting .gitignore rules per directory...", file=sys.stderr)
     gitignore_specs = {}
 
-    for dirpath, dirnames, filenames in tqdm(
-        os.walk(root_path), desc="Scanning Directories"
-    ):
+    for dirpath, _, _ in tqdm(os.walk(root_path), desc="Scanning Directories"):
         dirpath = Path(dirpath)
         rel_path = dirpath.relative_to(root_path)
         gitignore_file = dirpath / ".gitignore"
@@ -259,62 +341,29 @@ def generate_tree(
     exclude_patterns = exclude_patterns or []
 
     def _tree(dir_path: Path, prefix=""):
-        try:
-            entries = sorted(dir_path.iterdir())
-        except OSError as e:
-            print(f"Warning: cannot list {dir_path} due to error: {e}", file=sys.stderr)
-            return
-
-        # Filter out gitignored entries (they should never appear)
-        visible_entries = [
-            entry
-            for entry in entries
-            if not is_ignored(entry, gitignore_specs, root_path, tracked_files)
-        ]
-
+        visible_entries = _get_visible_entries(
+            dir_path, gitignore_specs, root_path, tracked_files
+        )
         for idx, entry in enumerate(visible_entries):
             connector = "└── " if idx == len(visible_entries) - 1 else "├── "
             if entry.is_dir():
                 rel_path = entry.relative_to(root_path).as_posix()
-                # Check if the directory is excluded by the -e option
+                # Check if the directory is excluded by the -e option.
                 if exclude_patterns and matches_any_pattern(rel_path, exclude_patterns):
-                    # Compressed view: show directory name and a sample of its immediate children
                     tree_lines.append(prefix + connector + entry.name)
-                    try:
-                        children = sorted(entry.iterdir())
-                    except OSError as e:
-                        print(
-                            f"Warning: cannot list {entry} due to error: {e}",
-                            file=sys.stderr,
-                        )
-                        continue
-                    # Filter out gitignored children
-                    children = [
-                        child
-                        for child in children
-                        if not is_ignored(
-                            child, gitignore_specs, root_path, tracked_files
-                        )
-                    ]
-                    max_items = 3  # maximum number of items to show in compressed view
-                    count = 0
-                    for child in children:
-                        if count >= max_items:
-                            tree_lines.append(prefix + "    " + "[...]")
-                            break
-                        # For visual consistency, use a simple connector for children (no recursive expansion)
-                        child_connector = "└── "
-                        tree_lines.append(
-                            prefix + "    " + child_connector + child.name
-                        )
-                        count += 1
+                    comp_lines = _compress_directory(
+                        entry,
+                        gitignore_specs,
+                        root_path,
+                        tracked_files,
+                        prefix + "    ",
+                    )
+                    tree_lines.extend(comp_lines)
                 else:
-                    # Normal recursion for non-excluded directories.
                     tree_lines.append(prefix + connector + entry.name)
                     extension = "    " if idx == len(visible_entries) - 1 else "│   "
                     _tree(entry, prefix + extension)
             else:
-                # For files, simply add them if they’re not gitignored.
                 tree_lines.append(prefix + connector + entry.name)
 
     _tree(root_path)
@@ -350,7 +399,6 @@ def collect_files_content(
     file_sections: list[str] = []
     unrecognized_files: list[str] = []
 
-    # Ensure include/exclude are lists.
     include_patterns = include_patterns or []
     exclude_patterns = exclude_patterns or []
 
@@ -375,27 +423,10 @@ def collect_files_content(
                 unrecognized_files.append(rel_path)
                 continue
 
-            try:
-                with full_file_path.open("r", encoding="utf-8", errors="replace") as f:
-                    content = f.read()
-            except Exception as e:
-                print(
-                    f"Skipping file {rel_path} due to read error: {e}",
-                    file=sys.stderr,
-                )
-                continue
-
-            # Add line numbers if the option is enabled.
-            if line_numbers:
-                content = add_line_numbers(content)
-
-            language = infer_language(full_file_path)
-            file_header = f"## File: `{rel_path}`\n*(Relative Path: `{rel_path}`)*"
-            fenced_content = (
-                f"```{language}\n{content}\n```" if language else f"```\n{content}\n```"
-            )
-            section = f"{file_header}\n\n{fenced_content}\n\n---\n"
-            file_sections.append(section)
+            # Use helper to process the file.
+            _, section = _process_file(full_file_path, root_path, line_numbers)
+            if section:
+                file_sections.append(section)
 
     return file_sections, unrecognized_files
 
