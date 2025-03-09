@@ -1,25 +1,25 @@
 # GPT Copy
 
 ## Overview
-This script recursively scans a directory, collects readable files, and concatenates them into a single structured stream. The output can be printed to stdout or written to a file. The purpose is to provide an easy way to feed structured content (such as codebases, documentation, or notes) into language models like GPT.
+GPT Copy is a command-line tool that recursively scans a directory, collects readable files, and concatenates them into a single structured markdown stream. The output can be printed to stdout or written to a file, making it easy to feed codebases, documentation, or notes into language models like GPT.
 
 ## Features
-- Recursively scans directories while respecting `.gitignore` rules.
-- Collects and concatenates all readable files.
-- Identifies file types based on extensions and formats content accordingly.
-- Excludes binary and ignored files.
-- Outputs structured markdown with file-specific code fences.
-- Supports filtering files using glob-style include and exclude patterns.
-- Includes a `tokens` CLI command to count the number of tokens in text using OpenAI's `tiktoken` library with the GPT-4o model encoding.
+- **Recursive Directory Scanning:** Respects `.gitignore` rules to selectively process files.
+- **Structured Output:** Concatenates file contents into a structured markdown document with file-specific code fences.
+- **File Filtering:** Supports glob-style include (`-i/--include`) and exclude (`-e/--exclude`) patterns for precise file selection.
+- **Force Mode:** The `-f/--force` option bypasses ignore rules and Git-tracked file restrictions.
+- **Line Numbering:** Add zero-padded line numbers to each file's content using the `-n/--number` option (similar to `cat -n`).
+- **Token Counting:** Includes a separate `tokens` CLI command to count the number of tokens in text using OpenAI’s `tiktoken` library with GPT-4o model encoding.
 
 ## Installation
-Ensure you have Python 3 installed. You can install dependencies using:
+Ensure you have Python 3 installed. You can install the dependencies using:
 
 ```sh
 pip install -r requirements.txt
 ```
 
 Alternatively, install directly from Git:
+
 ```sh
 pip install git+https://github.com/simone-viozzi/gpt-copy.git
 ```
@@ -27,85 +27,94 @@ pip install git+https://github.com/simone-viozzi/gpt-copy.git
 ## Usage
 
 ### Basic Usage
+Run the tool by specifying the target directory:
+
 ```sh
 gpt-copy /path/to/directory
 ```
 
 ### Save Output to a File
+Redirect the output to a file:
+
 ```sh
 gpt-copy /path/to/directory -o output.md
 ```
 
 ### Advanced File Filtering
-You can fine-tune which files are processed using two new options:
+Fine-tune which files are processed using include and exclude options.
 
 - **Include Files (`-i` or `--include`):**
-  Provide one or more glob patterns (with optional brace expansion) to specify files that should be **included**. When specified, only files matching at least one include pattern will be processed.
+  Specify one or more glob patterns (with optional brace expansion) to include only matching files.
 
   **Examples:**
   - Include all Python files in the `src` folder:
     ```sh
     gpt-copy /path/to/directory -i "src/*.py"
     ```
-  - Include specific modules using brace expansion:
+  - Include specific modules:
     ```sh
     gpt-copy /path/to/directory -i "src/{module1,module2}.py"
     ```
 
 - **Exclude Files (`-e` or `--exclude`):**
-  Provide one or more glob patterns to specify files that should be **excluded**. Exclusion takes precedence over inclusion.
+  Specify one or more glob patterns to exclude files. Exclusion takes precedence over inclusion.
 
   **Examples:**
   - Exclude all files in the `tests` folder:
     ```sh
     gpt-copy /path/to/directory -e "tests/*"
     ```
-  - Exclude a specific file even if it is included by another pattern:
+  - Exclude a specific file:
     ```sh
     gpt-copy /path/to/directory -i "src/*.py" -e "src/__init__.py"
     ```
 
 ### Force Mode (`-f` or `--force`)
-The `-f` (or `--force`) option forces the script to ignore `.gitignore` rules and Git-tracked file restrictions. This means the script will process **all** files in the provided directory regardless of any ignore settings.
+Ignore `.gitignore` and Git-tracked file restrictions to process **all** files:
 
-**Usage Example:**
 ```sh
 gpt-copy /path/to/directory -f
 ```
 
+### Add Line Numbers (`-n` or `--number`)
+Enable line numbering for the content of each file. This option prefixes each line with a zero-padded line number, similar to the Unix `cat -n` command.
+
+**Usage Example:**
+```sh
+gpt-copy /path/to/directory -n
+```
+
 ### Count Tokens with `tokens`
-A new command, `tokens`, has been added to count the number of tokens in a given text using the `tiktoken` library with the GPT-4o model encoding. This command can read text from a file or from standard input, making it easy to pipe the output of `gpt-copy` into it.
+Count the number of tokens in a given text using GPT-4o encoding. The command reads from a file or standard input.
 
 **Examples:**
 - Count tokens in a file:
   ```sh
   tokens file.txt
   ```
-- Pipe the output of `gpt-copy` into `tokens`:
+- Pipe output from `gpt-copy` into `tokens`:
   ```sh
   gpt-copy /path/to/directory | tokens
   ```
 
 ## How It Works
-1. **Collects `.gitignore` Rules**
-   - Scans the directory for `.gitignore` files and applies rules accordingly.
-   - Ensures ignored files and directories are skipped unless `-f` is specified.
+1. **Collects `.gitignore` Rules:**
+   Scans the directory for `.gitignore` files and applies the rules to skip ignored files unless the force mode is enabled.
 
-2. **Generates a Structured File Tree**
-   - Displays a visual representation of the directory structure.
+2. **Generates a Structured File Tree:**
+   Creates a visual representation of the directory structure.
 
-3. **Reads and Formats Files**
+3. **Reads and Formats Files:**
    - Detects file type based on extension.
-   - Wraps code files in proper markdown code fences.
+   - Wraps file contents in appropriate markdown code fences.
+   - Adds line numbers if the `-n/--number` option is enabled.
    - Skips binary or unrecognized file types.
 
-4. **Applies File Filtering**
-   - **Include Patterns (`-i`):** Only files matching the specified patterns are processed.
-   - **Exclude Patterns (`-e`):** Files matching these patterns are omitted—even if they match an include pattern.
-   - The filtering is applied to file paths relative to the provided root directory.
+4. **Applies File Filtering:**
+   Uses include and exclude glob patterns to determine which files to process, based on their paths relative to the root directory.
 
 ## Example Output
-````
+`````
 # Folder Structure
 
 ```
@@ -133,10 +142,10 @@ print("Hello, World!")
 version: 1.0
 enabled: true
 ```
-````
+`````
 
 ## Contributing
-If you'd like to contribute, feel free to open a pull request.
+Contributions are welcome! If you'd like to contribute, please open a pull request with your proposed changes.
 
 ## License
-This project is licensed under the MIT License.
+This project is licensed under the [MIT License](LICENSE).
