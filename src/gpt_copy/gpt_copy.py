@@ -10,7 +10,7 @@ from pathspec import PathSpec
 from pathspec.patterns.gitwildmatch import GitWildMatchPattern
 from tqdm import tqdm
 
-from gpt_copy.filter import should_include_file
+from gpt_copy.filter import should_include_file, matches_any_pattern
 
 
 def add_line_numbers(text: str) -> str:
@@ -236,20 +236,27 @@ def generate_tree(
     root_path: Path,
     gitignore_specs: dict[str, PathSpec],
     tracked_files: set[str] | None = None,
+    exclude_patterns: list[str] | None = None,
 ) -> str:
     """
     Generate a folder structure tree.
 
+    Directories that match any of the provided exclude_patterns (specified via the -e/--exclude option)
+    will be displayed in a compressed form: only one level of their children is shown (up to a maximum number),
+    followed by an ellipsis "[...]" if there are additional items. Gitignored files (or directories) are never shown.
+
     Args:
         root_path (Path): The root path to start generating the tree.
         gitignore_specs (Dict[str, PathSpec]): The gitignore specifications.
-        tracked_files (Optional[Set[str]]): The set of tracked files.
+        tracked_files (Optional[Set[str]]): The set of tracked files (if applicable).
+        exclude_patterns (Optional[List[str]]): Glob patterns to exclude files/directories.
 
     Returns:
         str: The generated folder structure tree.
     """
     print("Generating folder structure tree...", file=sys.stderr)
     tree_lines = [root_path.name or str(root_path)]
+    exclude_patterns = exclude_patterns or []
 
     def _tree(dir_path: Path, prefix=""):
         try:
@@ -258,16 +265,57 @@ def generate_tree(
             print(f"Warning: cannot list {dir_path} due to error: {e}", file=sys.stderr)
             return
 
-        for i, entry in enumerate(entries):
-            if is_ignored(entry, gitignore_specs, root_path, tracked_files):
-                continue
+        # Filter out gitignored entries (they should never appear)
+        visible_entries = [
+            entry
+            for entry in entries
+            if not is_ignored(entry, gitignore_specs, root_path, tracked_files)
+        ]
 
-            connector = "└── " if i == len(entries) - 1 else "├── "
-            tree_lines.append(prefix + connector + entry.name)
-
+        for idx, entry in enumerate(visible_entries):
+            connector = "└── " if idx == len(visible_entries) - 1 else "├── "
             if entry.is_dir():
-                extension = "    " if i == len(entries) - 1 else "│   "
-                _tree(entry, prefix + extension)
+                rel_path = entry.relative_to(root_path).as_posix()
+                # Check if the directory is excluded by the -e option
+                if exclude_patterns and matches_any_pattern(rel_path, exclude_patterns):
+                    # Compressed view: show directory name and a sample of its immediate children
+                    tree_lines.append(prefix + connector + entry.name)
+                    try:
+                        children = sorted(entry.iterdir())
+                    except OSError as e:
+                        print(
+                            f"Warning: cannot list {entry} due to error: {e}",
+                            file=sys.stderr,
+                        )
+                        continue
+                    # Filter out gitignored children
+                    children = [
+                        child
+                        for child in children
+                        if not is_ignored(
+                            child, gitignore_specs, root_path, tracked_files
+                        )
+                    ]
+                    max_items = 3  # maximum number of items to show in compressed view
+                    count = 0
+                    for child in children:
+                        if count >= max_items:
+                            tree_lines.append(prefix + "    " + "[...]")
+                            break
+                        # For visual consistency, use a simple connector for children (no recursive expansion)
+                        child_connector = "└── "
+                        tree_lines.append(
+                            prefix + "    " + child_connector + child.name
+                        )
+                        count += 1
+                else:
+                    # Normal recursion for non-excluded directories.
+                    tree_lines.append(prefix + connector + entry.name)
+                    extension = "    " if idx == len(visible_entries) - 1 else "│   "
+                    _tree(entry, prefix + extension)
+            else:
+                # For files, simply add them if they’re not gitignored.
+                tree_lines.append(prefix + connector + entry.name)
 
     _tree(root_path)
     return "\n".join(tree_lines)
@@ -449,7 +497,9 @@ def main(
     root_path = root_path.resolve()
     print(f"Starting script for directory: {root_path}", file=sys.stderr)
     gitignore_specs, tracked_files = get_ignore_settings(root_path, force)
-    tree_output = generate_tree(root_path, gitignore_specs, tracked_files)
+    tree_output = generate_tree(
+        root_path, gitignore_specs, tracked_files, exclude_patterns
+    )
     file_sections, unrecognized_files = collect_files_content(
         root_path,
         gitignore_specs,
