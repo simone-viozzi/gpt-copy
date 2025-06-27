@@ -8,7 +8,7 @@ GPT Copy is a command-line tool that recursively scans a directory, collects rea
 - **Structured Output:** Concatenates file contents into a structured markdown document with file-specific code fences.
 - **File Filtering:** Supports glob-style include (`-i/--include`) and exclude (`-e/--exclude`) patterns for precise file selection.
 - **Force Mode:** The `-f/--force` option bypasses ignore rules and Git-tracked file restrictions.
-- **Line Numbering:** Add zero-padded line numbers to each file's content using the `-n/--number` option (similar to `cat -n`).
+- **Line Numbering:** Zero-padded line numbers are added to each file's content by default (similar to `cat -n`). Use `--no-number` to disable.
 - **Token Counting:** Includes a separate `tokens` CLI command to count the number of tokens in text using OpenAI’s `tiktoken` library with GPT-4o model encoding.
 
 ## Installation
@@ -76,12 +76,17 @@ Ignore `.gitignore` and Git-tracked file restrictions to process **all** files:
 gpt-copy /path/to/directory -f
 ```
 
-### Add Line Numbers (`-n` or `--number`)
-Enable line numbering for the content of each file. This option prefixes each line with a zero-padded line number, similar to the Unix `cat -n` command.
+### Line Numbers (enabled by default)
+Line numbering is **enabled by default** for the content of each file. Each line is prefixed with a zero-padded line number, similar to the Unix `cat -n` command.
 
-**Usage Example:**
+**Basic usage (line numbers included):**
 ```sh
-gpt-copy /path/to/directory -n
+gpt-copy /path/to/directory
+```
+
+**Disable line numbers:**
+```sh
+gpt-copy /path/to/directory --no-number
 ```
 
 ### Count Tokens with `tokens`
@@ -107,7 +112,7 @@ Count the number of tokens in a given text using GPT-4o encoding. The command re
 3. **Reads and Formats Files:**
    - Detects file type based on extension.
    - Wraps file contents in appropriate markdown code fences.
-   - Adds line numbers if the `-n/--number` option is enabled.
+   - Adds line numbers by default (can be disabled with `--no-number`).
    - Skips binary or unrecognized file types.
 
 4. **Applies File Filtering:**
