@@ -500,14 +500,6 @@ def write_output(
     help="Glob pattern(s) to exclude files (e.g., 'src/tests/*')",
 )
 @click.option(
-    "-n",
-    "--number",
-    "enable_line_numbers",
-    is_flag=True,
-    default=False,
-    help="Enable line numbers for file content (default: enabled).",
-)
-@click.option(
     "--no-number",
     "no_line_numbers",
     is_flag=True,
@@ -520,7 +512,6 @@ def main(
     force: bool,
     include_patterns: tuple[str, ...],
     exclude_patterns: tuple[str, ...],
-    enable_line_numbers: bool,
     no_line_numbers: bool,
 ) -> None:
     """
@@ -532,15 +523,10 @@ def main(
         force (bool): If True, ignore .gitignore and Git-tracked files.
         include_patterns (Tuple[str, ...]): The tuple of include glob patterns.
         exclude_patterns (Tuple[str, ...]): The tuple of exclude glob patterns.
-        enable_line_numbers (bool): If True, explicitly enable line numbers.
         no_line_numbers (bool): If True, disable line numbers.
     """
-    # Line numbers are enabled by default
-    # --no-number disables them, -n explicitly enables them (but they're already default)
-    if no_line_numbers:
-        use_line_numbers = False
-    else:
-        use_line_numbers = True  # Default behavior: always enabled unless explicitly disabled
+    # Line numbers are enabled by default, --no-number disables them
+    use_line_numbers = not no_line_numbers
     
     root_path = root_path.resolve()
     print(f"Starting script for directory: {root_path}", file=sys.stderr)
