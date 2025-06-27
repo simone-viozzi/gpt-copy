@@ -28,6 +28,7 @@ in pkgs.mkShell rec {
     pythonPackages.tqdm
     pythonPackages.pytest
     pre-commit
+    uv # UV package manager
   ];
 
   postVenvCreation = ''
@@ -40,10 +41,10 @@ in pkgs.mkShell rec {
     # allow pip to install wheels
     unset SOURCE_DATE_EPOCH
 
-    pip install --upgrade wheel setuptools
+    pip install --upgrade wheel hatchling
     export PKG_CONFIG_PATH="${pkgs.openssl.dev}/lib/pkgconfig:$PKG_CONFIG_PATH"
 
-    echo "Environment setup complete."
+    echo "Environment setup complete. UV and hatchling are available."
     export LD_LIBRARY_PATH=${pkgs.zlib}/lib:$LD_LIBRARY_PATH
   '';
 }
