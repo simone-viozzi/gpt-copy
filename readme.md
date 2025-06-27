@@ -89,11 +89,6 @@ gpt-copy /path/to/directory
 gpt-copy /path/to/directory --no-number
 ```
 
-**Explicitly enable line numbers (redundant, but supported for backward compatibility):**
-```sh
-gpt-copy /path/to/directory -n
-```
-
 ### Count Tokens with `tokens`
 Count the number of tokens in a given text using GPT-4o encoding. The command reads from a file or standard input.
 

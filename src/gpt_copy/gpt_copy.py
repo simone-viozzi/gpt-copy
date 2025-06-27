@@ -525,8 +525,6 @@ def main(
         exclude_patterns (Tuple[str, ...]): The tuple of exclude glob patterns.
         no_line_numbers (bool): If True, disable line numbers.
     """
-    # Line numbers are enabled by default, --no-number disables them
-    use_line_numbers = not no_line_numbers
     
     root_path = root_path.resolve()
     print(f"Starting script for directory: {root_path}", file=sys.stderr)
@@ -541,7 +539,7 @@ def main(
         tracked_files,
         include_patterns=list(include_patterns),
         exclude_patterns=list(exclude_patterns),
-        line_numbers=use_line_numbers,
+        line_numbers=not no_line_numbers,
     )
 
     if output_file:
