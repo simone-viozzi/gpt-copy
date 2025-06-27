@@ -1,0 +1,33 @@
+name: Copilot Setup Steps
+
+on:
+  workflow_dispatch:
+
+jobs:
+  setup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Allow astral.sh in firewall
+        uses: github/copilot-firewall-config@v1
+        with:
+          allowlist: |
+            astral.sh
+
+      - name: Install uv (fast Python package manager)
+        run: |
+          curl -LsSf https://astral.sh/uv/install.sh | sh
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
+
+      - name: Install Python dependencies
+        run: |
+          # Install Python if not available
+          if ! command -v python3 &> /dev/null; then
+            sudo apt-get update
+            sudo apt-get install -y python3 python3-pip
+          fi
+          
+          # Verify uv installation
+          uv --version
+          
+          # Set up environment for development
+          echo "uv and Python are now available for Copilot agent development"
