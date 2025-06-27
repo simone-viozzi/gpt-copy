@@ -28,6 +28,7 @@ in pkgs.mkShell rec {
     pythonPackages.tqdm
     pythonPackages.pytest
     pre-commit
+    uv # Fast Python package installer
   ];
 
   postVenvCreation = ''
@@ -44,6 +45,7 @@ in pkgs.mkShell rec {
     export PKG_CONFIG_PATH="${pkgs.openssl.dev}/lib/pkgconfig:$PKG_CONFIG_PATH"
 
     echo "Environment setup complete."
+    echo "Python $(python --version) and uv are available for package management."
     export LD_LIBRARY_PATH=${pkgs.zlib}/lib:$LD_LIBRARY_PATH
   '';
 }

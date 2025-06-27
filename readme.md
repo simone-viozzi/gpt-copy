@@ -12,16 +12,37 @@ GPT Copy is a command-line tool that recursively scans a directory, collects rea
 - **Token Counting:** Includes a separate `tokens` CLI command to count the number of tokens in text using OpenAI’s `tiktoken` library with GPT-4o model encoding.
 
 ## Installation
-Ensure you have Python 3 installed. You can install the dependencies using:
-
-```sh
-pip install -r requirements.txt
-```
-
-Alternatively, install directly from Git:
+Ensure you have Python 3.10+ installed. You can install the package using pip:
 
 ```sh
 pip install git+https://github.com/simone-viozzi/gpt-copy.git
+```
+
+Or install in development mode:
+
+```sh
+git clone https://github.com/simone-viozzi/gpt-copy.git
+cd gpt-copy
+pip install -e .
+```
+
+### Development Environment
+For development, this project includes a Nix shell environment with Python and [uv](https://docs.astral.sh/uv/) (fast Python package manager):
+
+```sh
+nix-shell  # Enter the development environment
+```
+
+The environment provides:
+- Python 3.11
+- uv for fast package management
+- All development dependencies (pytest, ruff, pre-commit, etc.)
+
+You can also use uv directly for package management:
+
+```sh
+uv venv        # Create virtual environment
+uv pip install -e .  # Install in development mode with uv
 ```
 
 ## Usage
