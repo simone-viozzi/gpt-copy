@@ -502,9 +502,17 @@ def write_output(
 @click.option(
     "-n",
     "--number",
-    "line_numbers",
+    "enable_line_numbers",
     is_flag=True,
-    help="Add line numbers to file content.",
+    default=False,
+    help="Enable line numbers for file content (default: enabled).",
+)
+@click.option(
+    "--no-number",
+    "no_line_numbers",
+    is_flag=True,
+    default=False,
+    help="Disable line numbers for file content.",
 )
 def main(
     root_path: Path,
@@ -512,7 +520,8 @@ def main(
     force: bool,
     include_patterns: tuple[str, ...],
     exclude_patterns: tuple[str, ...],
-    line_numbers: bool,
+    enable_line_numbers: bool,
+    no_line_numbers: bool,
 ) -> None:
     """
     Main function to start the script.
@@ -523,8 +532,16 @@ def main(
         force (bool): If True, ignore .gitignore and Git-tracked files.
         include_patterns (Tuple[str, ...]): The tuple of include glob patterns.
         exclude_patterns (Tuple[str, ...]): The tuple of exclude glob patterns.
-        line_numbers (bool): If True, add line numbers to the file contents.
+        enable_line_numbers (bool): If True, explicitly enable line numbers.
+        no_line_numbers (bool): If True, disable line numbers.
     """
+    # Line numbers are enabled by default
+    # --no-number disables them, -n explicitly enables them (but they're already default)
+    if no_line_numbers:
+        use_line_numbers = False
+    else:
+        use_line_numbers = True  # Default behavior: always enabled unless explicitly disabled
+    
     root_path = root_path.resolve()
     print(f"Starting script for directory: {root_path}", file=sys.stderr)
     gitignore_specs, tracked_files = get_ignore_settings(root_path, force)
@@ -538,7 +555,7 @@ def main(
         tracked_files,
         include_patterns=list(include_patterns),
         exclude_patterns=list(exclude_patterns),
-        line_numbers=line_numbers,
+        line_numbers=use_line_numbers,
     )
 
     if output_file:
