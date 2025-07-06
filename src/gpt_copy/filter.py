@@ -21,7 +21,7 @@ def expand_braces(pattern: str) -> list[str]:
     pre = pattern[: match.start()]
     post = pattern[match.end() :]
     options = match.group(1).split(",")
-    patterns = []
+    patterns: list[str] = []
     for option in options:
         # Recursively expand in case of multiple braces.
         patterns.extend(expand_braces(pre + option + post))

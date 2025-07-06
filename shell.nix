@@ -23,10 +23,10 @@ in pkgs.mkShell rec {
     pythonPackages.venvShellHook
     pythonPackages.pip
     pythonPackages.ruff
-    pythonPackages.click
-    pythonPackages.pathspec
-    pythonPackages.tqdm
-    pythonPackages.pytest
+    #pythonPackages.click
+    #pythonPackages.pathspec
+    #pythonPackages.tqdm
+    #pythonPackages.pytest
     pre-commit
   ];
 
