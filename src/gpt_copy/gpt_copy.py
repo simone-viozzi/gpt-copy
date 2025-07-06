@@ -6,6 +6,7 @@ from typing import TextIO
 
 import click
 import pygit2
+from pygit2 import Repository  # type: ignore
 from pathspec import PathSpec
 from pathspec.patterns.gitwildmatch import GitWildMatchPattern
 from tqdm import tqdm
@@ -31,7 +32,7 @@ def add_line_numbers(text: str) -> str:
         return text
     width = len(str(len(lines)))
     numbered_lines = [
-        f"{str(i+1).zfill(width)}: {line}" for i, line in enumerate(lines)
+        f"{str(i + 1).zfill(width)}: {line}" for i, line in enumerate(lines)
     ]
     return "\n".join(numbered_lines)
 
@@ -97,7 +98,7 @@ def _compress_directory(
     Return a list of tree lines for a compressed view of an excluded directory.
     It shows up to max_items immediate children followed by an ellipsis if there are more.
     """
-    lines = []
+    lines: list[str] = []
     try:
         children = sorted(dir_path.iterdir())
     except OSError as e:
@@ -173,7 +174,7 @@ def infer_language(file_path: Path) -> str:
     return minimal_map.get(file_path.suffix.lower(), "")
 
 
-def find_git_repo(path: Path) -> pygit2.Repository | None:
+def find_git_repo(path: Path) -> Repository | None:
     """
     Find the git repository for the given path.
 
@@ -187,22 +188,22 @@ def find_git_repo(path: Path) -> pygit2.Repository | None:
     if repo_path is None:
         return None
     try:
-        return pygit2.Repository(Path(repo_path).parent.as_posix())
+        return Repository(Path(repo_path).parent.as_posix())
     except pygit2.GitError:
         return None
 
 
-def get_tracked_files(repo: pygit2.Repository) -> set[str]:
+def get_tracked_files(repo: Repository) -> set[str]:
     """
     Get the set of tracked files in the given git repository.
 
     Args:
-        repo (pygit2.Repository): The git repository.
+        repo (Repository): The git repository.
 
     Returns:
         Set[str]: A set of tracked file paths.
     """
-    return {entry.path for entry in repo.index}
+    return {entry.path for entry in repo.index}  # type: ignore
 
 
 def get_ignore_settings(
@@ -231,7 +232,7 @@ def get_ignore_settings(
             subfolder_relative = None
 
         if subfolder_relative is not None:
-            new_tracked = set()
+            new_tracked: set[str] = set()
             for f in all_tracked:
                 file_path = Path(f)
                 try:
@@ -258,7 +259,7 @@ def collect_gitignore_specs(root_path: Path) -> dict[str, PathSpec]:
         Dict[str, PathSpec]: A dictionary mapping directory paths to PathSpec objects.
     """
     print("Collecting .gitignore rules per directory...", file=sys.stderr)
-    gitignore_specs = {}
+    gitignore_specs: dict[str, PathSpec] = {}
 
     for dirpath, _, _ in tqdm(os.walk(root_path), desc="Scanning Directories"):
         dirpath = Path(dirpath)
@@ -340,7 +341,7 @@ def generate_tree(
     tree_lines = [root_path.name or str(root_path)]
     exclude_patterns = exclude_patterns or []
 
-    def _tree(dir_path: Path, prefix=""):
+    def _tree(dir_path: Path, prefix: str = ""):
         visible_entries = _get_visible_entries(
             dir_path, gitignore_specs, root_path, tracked_files
         )
@@ -525,12 +526,12 @@ def main(
         exclude_patterns (Tuple[str, ...]): The tuple of exclude glob patterns.
         no_line_numbers (bool): If True, disable line numbers.
     """
-    
+
     root_path = root_path.resolve()
     print(f"Starting script for directory: {root_path}", file=sys.stderr)
     gitignore_specs, tracked_files = get_ignore_settings(root_path, force)
     tree_output = generate_tree(
-        root_path, gitignore_specs, tracked_files, exclude_patterns
+        root_path, gitignore_specs, tracked_files, list(exclude_patterns)
     )
     file_sections, unrecognized_files = collect_files_content(
         root_path,

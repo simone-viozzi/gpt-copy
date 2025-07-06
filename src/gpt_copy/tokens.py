@@ -2,6 +2,7 @@
 import sys
 import click
 import tiktoken
+from pathlib import Path
 
 
 def count_tokens(text: str) -> int:
@@ -17,7 +18,7 @@ def count_tokens(text: str) -> int:
 @click.argument(
     "input_file", type=click.Path(exists=True, dir_okay=False), required=False
 )
-def main(input_file):
+def main(input_file: Path):
     """
     Count the tokens in the provided text.
 
