@@ -100,32 +100,43 @@ class TestTokensCounting:
             assert "file2.py" in tree_output
     
     def test_generate_tree_with_tokens_top_n(self):
-        """Test generating tree with top-N filtering."""
+        """Test generating tree with top-N filtering and correct ordering."""
         with tempfile.TemporaryDirectory() as temp_dir:
             temp_path = Path(temp_dir)
             
-            # Create file infos with different token counts
+            # Create file infos with different token counts (in random order)
             file_infos = [
                 FileInfo(temp_path / "small.py", "small.py", 2, False),
                 FileInfo(temp_path / "medium.py", "medium.py", 5, False),
                 FileInfo(temp_path / "large.py", "large.py", 10, False),
+                FileInfo(temp_path / "subdir/huge.py", "subdir/huge.py", 15, False),
             ]
             
-            # Generate tree with top-2
+            # Generate tree with top-3
             tree_output = generate_tree_with_tokens(
                 temp_path,
                 file_infos,
                 {},  # gitignore_specs
                 None,  # tracked_files
                 None,  # exclude_patterns
-                2,  # top_n
+                3,  # top_n
             )
             
-            # Check only top 2 files are included
+            # Check only top 3 files are included
+            assert "subdir/huge.py" in tree_output  # 15 tokens - should be included
             assert "large.py" in tree_output  # 10 tokens - should be included
             assert "medium.py" in tree_output  # 5 tokens - should be included
             assert "small.py" not in tree_output  # 2 tokens - should be excluded
-            assert "Showing top 2 files" in tree_output
+            assert "Showing top 3 files" in tree_output
+            
+            # Check that files are in correct order by token count
+            lines = tree_output.split('\n')
+            file_lines = [line for line in lines if '(' in line and 'tokens)' in line and 'directory' not in line]
+            
+            # Should be ordered: huge.py (15), large.py (10), medium.py (5)
+            assert "subdir/huge.py (15 tokens)" in file_lines[0]
+            assert "large.py (10 tokens)" in file_lines[1]  
+            assert "medium.py (5 tokens)" in file_lines[2]
     
     def test_file_filtering_with_tokens(self):
         """Test that file filtering works with token counting."""

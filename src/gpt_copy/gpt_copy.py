@@ -451,43 +451,51 @@ def generate_tree_with_tokens(
     # Build a tree structure showing token counts
     tree_lines = [f"{root_path.name or str(root_path)} (directory)"]
     
-    # Create a mapping of directories to their files
-    dir_structure = {}
-    for file_info in file_infos:
-        parts = Path(file_info.relative_path).parts
-        current = dir_structure
-        
-        # Build directory structure
-        for i, part in enumerate(parts[:-1]):
-            if part not in current:
-                current[part] = {}
-            current = current[part]
-        
-        # Add file to its directory
-        if len(parts) > 0:
-            filename = parts[-1]
-            current[filename] = file_info
-    
-    def _add_tree_items(items, prefix="", is_last_at_level=True):
-        """Recursively add tree items with token counts."""
-        sorted_items = sorted(items.items(), key=lambda x: (
-            isinstance(x[1], dict), x[0]  # Directories first, then alphabetical
-        ))
-        
-        for idx, (name, item) in enumerate(sorted_items):
-            is_last = idx == len(sorted_items) - 1
+    if top_n is not None:
+        # When showing top-n, display files in token count order (flat structure)
+        for idx, file_info in enumerate(file_infos):
+            is_last = idx == len(file_infos) - 1
             connector = "└── " if is_last else "├── "
+            tree_lines.append(f"{connector}{file_info.relative_path} ({file_info.token_count} tokens)")
+    else:
+        # Regular tree structure when not using top-n
+        # Create a mapping of directories to their files
+        dir_structure = {}
+        for file_info in file_infos:
+            parts = Path(file_info.relative_path).parts
+            current = dir_structure
             
-            if isinstance(item, dict):
-                # Directory
-                tree_lines.append(f"{prefix}{connector}{name}/ (directory)")
-                extension = "    " if is_last else "│   "
-                _add_tree_items(item, prefix + extension, is_last)
-            else:
-                # File with token count
-                tree_lines.append(f"{prefix}{connector}{name} ({item.token_count} tokens)")
-    
-    _add_tree_items(dir_structure)
+            # Build directory structure
+            for i, part in enumerate(parts[:-1]):
+                if part not in current:
+                    current[part] = {}
+                current = current[part]
+            
+            # Add file to its directory
+            if len(parts) > 0:
+                filename = parts[-1]
+                current[filename] = file_info
+        
+        def _add_tree_items(items, prefix="", is_last_at_level=True):
+            """Recursively add tree items with token counts."""
+            sorted_items = sorted(items.items(), key=lambda x: (
+                isinstance(x[1], dict), x[0]  # Directories first, then alphabetical
+            ))
+            
+            for idx, (name, item) in enumerate(sorted_items):
+                is_last = idx == len(sorted_items) - 1
+                connector = "└── " if is_last else "├── "
+                
+                if isinstance(item, dict):
+                    # Directory
+                    tree_lines.append(f"{prefix}{connector}{name}/ (directory)")
+                    extension = "    " if is_last else "│   "
+                    _add_tree_items(item, prefix + extension, is_last)
+                else:
+                    # File with token count
+                    tree_lines.append(f"{prefix}{connector}{name} ({item.token_count} tokens)")
+        
+        _add_tree_items(dir_structure)
     
     if top_n is not None:
         total_files = len([f for f in file_infos if not f.is_directory])
