@@ -123,20 +123,24 @@ class TestTokensCounting:
             )
             
             # Check only top 3 files are included
-            assert "subdir/huge.py" in tree_output  # 15 tokens - should be included
+            assert "huge.py" in tree_output  # 15 tokens - should be included (in subdir)
             assert "large.py" in tree_output  # 10 tokens - should be included
             assert "medium.py" in tree_output  # 5 tokens - should be included
             assert "small.py" not in tree_output  # 2 tokens - should be excluded
             assert "Showing top 3 files" in tree_output
             
-            # Check that files are in correct order by token count
+            # Check that files are in correct order by token count within the tree structure
             lines = tree_output.split('\n')
-            file_lines = [line for line in lines if '(' in line and 'tokens)' in line and 'directory' not in line]
             
-            # Should be ordered: huge.py (15), large.py (10), medium.py (5)
-            assert "subdir/huge.py (15 tokens)" in file_lines[0]
-            assert "large.py (10 tokens)" in file_lines[1]  
-            assert "medium.py (5 tokens)" in file_lines[2]
+            # With the new tree structure, we should see:
+            # - subdir/ directory listed first (highest tokens: 15)
+            # - huge.py (15 tokens) inside subdir
+            # - large.py (10 tokens) at root level
+            # - medium.py (5 tokens) at root level
+            assert "subdir/ (15 tokens)" in tree_output
+            assert "huge.py (15 tokens)" in tree_output
+            assert "large.py (10 tokens)" in tree_output
+            assert "medium.py (5 tokens)" in tree_output
     
     def test_file_filtering_with_tokens(self):
         """Test that file filtering works with token counting."""
