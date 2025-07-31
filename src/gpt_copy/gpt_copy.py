@@ -437,6 +437,7 @@ def write_output(
     tree_output: str,
     file_sections: list[str],
     unrecognized_files: list[str],
+    tree_only: bool = False,
 ) -> None:
     """
     Write collected outputs to the specified output (file or stdout).
@@ -446,21 +447,28 @@ def write_output(
         tree_output (str): The generated folder structure tree.
         file_sections (List[str]): The collected file sections.
         unrecognized_files (List[str]): The list of unrecognized files.
+        tree_only (bool): If True, only output the tree structure.
     """
-    output.write("# Folder Structure\n\n```\n")
-    output.write(tree_output)
-    output.write("\n```\n\n")
+    if tree_only:
+        # Only output the tree structure without markdown headers
+        output.write(tree_output)
+        output.write("\n")
+    else:
+        # Original behavior: output everything with markdown formatting
+        output.write("# Folder Structure\n\n```\n")
+        output.write(tree_output)
+        output.write("\n```\n\n")
 
-    for section in file_sections:
-        output.write(section)
+        for section in file_sections:
+            output.write(section)
 
-    if unrecognized_files:
-        output.write("# Unrecognized Files\n\n")
-        output.write(
-            "The following files were not recognized by extension and were skipped:\n\n"
-        )
-        for rel_path in unrecognized_files:
-            output.write(f"- `{rel_path}`\n")
+        if unrecognized_files:
+            output.write("# Unrecognized Files\n\n")
+            output.write(
+                "The following files were not recognized by extension and were skipped:\n\n"
+            )
+            for rel_path in unrecognized_files:
+                output.write(f"- `{rel_path}`\n")
 
 
 @click.command()
@@ -507,6 +515,12 @@ def write_output(
     default=False,
     help="Disable line numbers for file content.",
 )
+@click.option(
+    "--tree-only",
+    is_flag=True,
+    default=False,
+    help="Output only the folder structure tree without file contents.",
+)
 def main(
     root_path: Path,
     output_file: str | None,
@@ -514,6 +528,7 @@ def main(
     include_patterns: tuple[str, ...],
     exclude_patterns: tuple[str, ...],
     no_line_numbers: bool,
+    tree_only: bool,
 ) -> None:
     """
     Main function to start the script.
@@ -525,6 +540,7 @@ def main(
         include_patterns (Tuple[str, ...]): The tuple of include glob patterns.
         exclude_patterns (Tuple[str, ...]): The tuple of exclude glob patterns.
         no_line_numbers (bool): If True, disable line numbers.
+        tree_only (bool): If True, output only the folder structure tree.
     """
 
     root_path = root_path.resolve()
@@ -533,22 +549,29 @@ def main(
     tree_output = generate_tree(
         root_path, gitignore_specs, tracked_files, list(exclude_patterns)
     )
-    file_sections, unrecognized_files = collect_files_content(
-        root_path,
-        gitignore_specs,
-        output_file,
-        tracked_files,
-        include_patterns=list(include_patterns),
-        exclude_patterns=list(exclude_patterns),
-        line_numbers=not no_line_numbers,
-    )
+    
+    if tree_only:
+        # Only output the tree structure
+        file_sections = []
+        unrecognized_files = []
+    else:
+        # Collect file contents as usual
+        file_sections, unrecognized_files = collect_files_content(
+            root_path,
+            gitignore_specs,
+            output_file,
+            tracked_files,
+            include_patterns=list(include_patterns),
+            exclude_patterns=list(exclude_patterns),
+            line_numbers=not no_line_numbers,
+        )
 
     if output_file:
         print(f"Writing output to {output_file}...", file=sys.stderr)
         with open(output_file, "w", encoding="utf-8") as out:
-            write_output(out, tree_output, file_sections, unrecognized_files)
+            write_output(out, tree_output, file_sections, unrecognized_files, tree_only)
     else:
-        write_output(sys.stdout, tree_output, file_sections, unrecognized_files)
+        write_output(sys.stdout, tree_output, file_sections, unrecognized_files, tree_only)
 
     print(f"All files merged into {output_file or 'stdout'}", file=sys.stderr)
     if unrecognized_files:
