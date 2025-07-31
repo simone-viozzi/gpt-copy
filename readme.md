@@ -10,6 +10,7 @@ GPT Copy is a command-line tool that recursively scans a directory, collects rea
 - **Force Mode:** The `-f/--force` option bypasses ignore rules and Git-tracked file restrictions.
 - **Line Numbering:** Zero-padded line numbers are added to each file's content by default (similar to `cat -n`). Use `--no-number` to disable.
 - **Token Counting:** Includes a separate `tokens` CLI command to count the number of tokens in text using OpenAI’s `tiktoken` library with GPT-4o model encoding.
+- **Integrated Token Analysis:** Use `--tokens` to display token counts for each file in the tree structure, with `--top-n` to filter and show only the files with the most tokens.
 
 ## Installation
 
@@ -113,6 +114,27 @@ Count the number of tokens in a given text using GPT-4o encoding. The command re
   ```sh
   gpt-copy /path/to/directory | tokens
   ```
+
+### Display Token Counts in Tree Structure
+Display token counts for each file in the directory tree using the `--tokens` option:
+
+```sh
+gpt-copy /path/to/directory --tokens
+```
+
+**Filter by Top N Files by Token Count:**
+Show only the files with the highest token counts:
+
+```sh
+gpt-copy /path/to/directory --tokens --top-n 5
+```
+
+**Combine with File Filtering:**
+Use with include/exclude patterns to count tokens only for specific file types:
+
+```sh
+gpt-copy /path/to/directory --tokens --include "*.py" --top-n 3
+```
 
 ## How It Works
 1. **Collects `.gitignore` Rules:**

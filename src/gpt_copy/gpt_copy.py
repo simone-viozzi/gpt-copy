@@ -12,6 +12,40 @@ from pathspec.patterns.gitwildmatch import GitWildMatchPattern
 from tqdm import tqdm
 
 from gpt_copy.filter import should_include_file, matches_any_pattern
+from dataclasses import dataclass
+from typing import List
+
+
+@dataclass
+class FileInfo:
+    """Information about a file including path and token count."""
+    path: Path
+    relative_path: str
+    token_count: int
+    is_directory: bool = False
+
+
+def count_tokens_safe(text: str) -> int:
+    """
+    Count tokens using tiktoken if available, otherwise use a simple estimation.
+    
+    Args:
+        text (str): The text to count tokens for.
+        
+    Returns:
+        int: The estimated number of tokens.
+    """
+    try:
+        import tiktoken
+        enc = tiktoken.encoding_for_model("gpt-4o")
+        tokens = enc.encode(text)
+        return len(tokens)
+    except Exception:
+        # Fallback to simple estimation if tiktoken fails
+        # Rough approximation: ~4 characters per token for English text
+        char_count = len(text)
+        estimated_tokens = max(1, char_count // 4)
+        return estimated_tokens
 
 
 def add_line_numbers(text: str) -> str:
@@ -315,6 +349,201 @@ def is_ignored(
     return False
 
 
+def collect_file_info_with_tokens(
+    root_path: Path,
+    gitignore_specs: dict[str, PathSpec],
+    tracked_files: set[str] | None,
+    include_patterns: list[str] | None = None,
+    exclude_patterns: list[str] | None = None,
+) -> List[FileInfo]:
+    """
+    Collect file information including token counts for all files.
+    
+    Args:
+        root_path (Path): The root path to start collecting files.
+        gitignore_specs (Dict[str, PathSpec]): The gitignore specifications.
+        tracked_files (Optional[Set[str]]): The set of tracked files.
+        include_patterns (Optional[List[str]]): The list of include glob patterns.
+        exclude_patterns (Optional[List[str]]): The list of exclude glob patterns.
+    
+    Returns:
+        List[FileInfo]: List of FileInfo objects with token counts.
+    """
+    print("Collecting file information with token counts...", file=sys.stderr)
+    file_infos: List[FileInfo] = []
+    
+    include_patterns = include_patterns or []
+    exclude_patterns = exclude_patterns or []
+    
+    for dirpath, dirnames, filenames in os.walk(root_path):
+        current_dir = Path(dirpath)
+        
+        # Process files in current directory
+        for filename in filenames:
+            full_file_path = current_dir / filename
+            
+            if is_ignored(full_file_path, gitignore_specs, root_path, tracked_files):
+                continue
+                
+            rel_path = full_file_path.relative_to(root_path).as_posix()
+            
+            # Apply include/exclude filters
+            if not should_include_file(rel_path, include_patterns, exclude_patterns):
+                continue
+                
+            if is_binary_file(full_file_path):
+                # Still include binary files but with 0 tokens
+                file_infos.append(FileInfo(
+                    path=full_file_path,
+                    relative_path=rel_path,
+                    token_count=0,
+                    is_directory=False
+                ))
+                continue
+            
+            # Count tokens for text files
+            try:
+                with full_file_path.open("r", encoding="utf-8", errors="replace") as f:
+                    content = f.read()
+                token_count = count_tokens_safe(content)
+            except Exception as e:
+                print(f"Warning: Could not read {rel_path} for token counting: {e}", file=sys.stderr)
+                token_count = 0
+            
+            file_infos.append(FileInfo(
+                path=full_file_path,
+                relative_path=rel_path,
+                token_count=token_count,
+                is_directory=False
+            ))
+    
+    return file_infos
+
+
+def calculate_directory_tokens(dir_structure, path_parts=()):
+    """
+    Calculate total tokens for directories recursively.
+    
+    Args:
+        dir_structure: Dictionary representing directory structure
+        path_parts: Tuple of path parts for current directory
+    
+    Returns:
+        int: Total token count for the directory
+    """
+    total_tokens = 0
+    for name, item in dir_structure.items():
+        if isinstance(item, dict):
+            # Recursively calculate tokens for subdirectory
+            total_tokens += calculate_directory_tokens(item, path_parts + (name,))
+        else:
+            # File - add its token count
+            total_tokens += item.token_count
+    return total_tokens
+
+
+def generate_tree_with_tokens(
+    root_path: Path,
+    file_infos: List[FileInfo],
+    gitignore_specs: dict[str, PathSpec],
+    tracked_files: set[str] | None = None,
+    exclude_patterns: list[str] | None = None,
+    top_n: int | None = None,
+) -> str:
+    """
+    Generate a folder structure tree with token counts.
+    
+    Args:
+        root_path (Path): The root path to start generating the tree.
+        file_infos (List[FileInfo]): List of file information with token counts.
+        gitignore_specs (Dict[str, PathSpec]): The gitignore specifications.
+        tracked_files (Optional[Set[str]]): The set of tracked files.
+        exclude_patterns (Optional[List[str]]): Glob patterns to exclude files/directories.
+        top_n (Optional[int]): Show only top N files by token count.
+    
+    Returns:
+        str: The generated folder structure tree with token counts.
+    """
+    print("Generating folder structure tree with token counts...", file=sys.stderr)
+    
+    # If top_n is specified, get the top N files but keep tree structure
+    top_files_set = None
+    if top_n is not None:
+        top_files = sorted(file_infos, key=lambda x: x.token_count, reverse=True)[:top_n]
+        top_files_set = {f.relative_path for f in top_files}
+    
+    # Create a mapping of directories to their files
+    dir_structure = {}
+    for file_info in file_infos:
+        # If top_n is specified, only include files in the top N
+        if top_files_set is not None and file_info.relative_path not in top_files_set:
+            continue
+            
+        parts = Path(file_info.relative_path).parts
+        current = dir_structure
+        
+        # Build directory structure
+        for i, part in enumerate(parts[:-1]):
+            if part not in current:
+                current[part] = {}
+            current = current[part]
+        
+        # Add file to its directory
+        if len(parts) > 0:
+            filename = parts[-1]
+            current[filename] = file_info
+    
+    # Calculate directory token counts
+    root_tokens = calculate_directory_tokens(dir_structure)
+    
+    # Build a tree structure showing token counts
+    tree_lines = [f"{root_path.name or str(root_path)} (directory)"]
+    if root_tokens > 0:
+        tree_lines[0] = f"{root_path.name or str(root_path)} ({root_tokens} tokens)"
+    
+    def _add_tree_items(items, prefix="", is_last_at_level=True):
+        """Recursively add tree items with token counts."""
+        # Separate directories and files, then sort each group
+        directories = []
+        files = []
+        
+        for name, item in items.items():
+            if isinstance(item, dict):
+                dir_tokens = calculate_directory_tokens(item)
+                directories.append((name, item, dir_tokens))
+            else:
+                files.append((name, item, item.token_count))
+        
+        # Sort directories by token count (descending), then files by token count (descending)
+        directories.sort(key=lambda x: x[2], reverse=True)
+        files.sort(key=lambda x: x[2], reverse=True)
+        
+        # Combine directories and files - directories first, then files (both sorted by tokens)
+        all_items = [(name, item, tokens, True) for name, item, tokens in directories] + \
+                   [(name, item, tokens, False) for name, item, tokens in files]
+        
+        for idx, (name, item, tokens, is_dir) in enumerate(all_items):
+            is_last = idx == len(all_items) - 1
+            connector = "└── " if is_last else "├── "
+            
+            if is_dir:
+                # Directory with token count
+                tree_lines.append(f"{prefix}{connector}{name}/ ({tokens} tokens)")
+                extension = "    " if is_last else "│   "
+                _add_tree_items(item, prefix + extension, is_last)
+            else:
+                # File with token count
+                tree_lines.append(f"{prefix}{connector}{name} ({tokens} tokens)")
+    
+    _add_tree_items(dir_structure)
+    
+    if top_n is not None:
+        total_files = len([f for f in file_infos if not f.is_directory])
+        tree_lines.append(f"\nShowing top {min(top_n, total_files)} files by token count")
+    
+    return "\n".join(tree_lines)
+
+
 def generate_tree(
     root_path: Path,
     gitignore_specs: dict[str, PathSpec],
@@ -521,6 +750,18 @@ def write_output(
     default=False,
     help="Output only the folder structure tree without file contents.",
 )
+@click.option(
+    "--tokens",
+    is_flag=True,
+    default=False,
+    help="Display token counts for each file in the tree structure.",
+)
+@click.option(
+    "--top-n",
+    type=int,
+    default=None,
+    help="When used with --tokens, show only the top N files by token count.",
+)
 def main(
     root_path: Path,
     output_file: str | None,
@@ -529,6 +770,8 @@ def main(
     exclude_patterns: tuple[str, ...],
     no_line_numbers: bool,
     tree_only: bool,
+    tokens: bool,
+    top_n: int | None,
 ) -> None:
     """
     Main function to start the script.
@@ -541,30 +784,55 @@ def main(
         exclude_patterns (Tuple[str, ...]): The tuple of exclude glob patterns.
         no_line_numbers (bool): If True, disable line numbers.
         tree_only (bool): If True, output only the folder structure tree.
+        tokens (bool): If True, display token counts for each file in the tree.
+        top_n (Optional[int]): When used with tokens, show only top N files by token count.
     """
 
     root_path = root_path.resolve()
     print(f"Starting script for directory: {root_path}", file=sys.stderr)
     gitignore_specs, tracked_files = get_ignore_settings(root_path, force)
-    tree_output = generate_tree(
-        root_path, gitignore_specs, tracked_files, list(exclude_patterns)
-    )
     
-    if tree_only:
-        # Only output the tree structure
-        file_sections = []
-        unrecognized_files = []
-    else:
-        # Collect file contents as usual
-        file_sections, unrecognized_files = collect_files_content(
+    if tokens:
+        # Use token-aware tree generation
+        file_infos = collect_file_info_with_tokens(
             root_path,
             gitignore_specs,
-            output_file,
             tracked_files,
             include_patterns=list(include_patterns),
             exclude_patterns=list(exclude_patterns),
-            line_numbers=not no_line_numbers,
         )
+        tree_output = generate_tree_with_tokens(
+            root_path,
+            file_infos,
+            gitignore_specs,
+            tracked_files,
+            list(exclude_patterns),
+            top_n,
+        )
+        # When showing tokens, we don't need the file contents
+        file_sections = []
+        unrecognized_files = []
+    else:
+        # Use regular tree generation
+        tree_output = generate_tree(
+            root_path, gitignore_specs, tracked_files, list(exclude_patterns)
+        )
+        
+        if tree_only:
+            # Only output the tree structure
+            file_sections = []
+            unrecognized_files = []
+        else:
+            # Collect file contents as usual
+            file_sections, unrecognized_files = collect_files_content(
+                root_path,
+                gitignore_specs,
+                output_file,
+                tracked_files,
+                include_patterns=list(include_patterns),
+                exclude_patterns=list(exclude_patterns),
+                line_numbers=not no_line_numbers,
+            )
 
     if output_file:
         print(f"Writing output to {output_file}...", file=sys.stderr)
