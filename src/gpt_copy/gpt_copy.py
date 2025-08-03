@@ -3,6 +3,7 @@ import os
 import sys
 from pathlib import Path
 from typing import TextIO
+import importlib.metadata
 
 import click
 import pygit2
@@ -701,6 +702,7 @@ def write_output(
 
 
 @click.command()
+@click.version_option(version=importlib.metadata.version("gpt_copy"))
 @click.argument(
     "root_path",
     type=click.Path(
