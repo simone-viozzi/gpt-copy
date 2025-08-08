@@ -14,7 +14,7 @@ def test_line_numbers_enabled_by_default(tmp_path: Path):
 
     runner = CliRunner()
     result = runner.invoke(main, [tmp_path.as_posix()])
-    
+
     assert result.exit_code == 0
     # Check that line numbers are present in the output
     assert "1: line one" in result.output
@@ -30,7 +30,7 @@ def test_no_number_flag_disables_line_numbers(tmp_path: Path):
 
     runner = CliRunner()
     result = runner.invoke(main, [tmp_path.as_posix(), "--no-number"])
-    
+
     assert result.exit_code == 0
     # Check that line numbers are NOT present in the output
     assert "1: line one" not in result.output
