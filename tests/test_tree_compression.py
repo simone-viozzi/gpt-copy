@@ -20,7 +20,7 @@ def test_generate_tree_excluded(tmp_path: Path):
     exclude_dir.mkdir()
     # Add four files to the excluded directory to trigger compression (max_items is 3)
     for i in range(1, 5):
-        (exclude_dir / f"file{i+2}.txt").write_text(
+        (exclude_dir / f"file{i + 2}.txt").write_text(
             f"Exclude file {i}", encoding="utf-8"
         )
 
