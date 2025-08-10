@@ -1,0 +1,42 @@
+# .github/workflows/copilot-setup-steps.yml
+name: Copilot Setup Steps
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - .github/workflows/copilot-setup-steps.yml
+  pull_request:
+    paths:
+      - .github/workflows/copilot-setup-steps.yml
+
+jobs:
+  # IMPORTANT: the job name must be exactly this for Copilot to pick it up.
+  copilot-setup-steps:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # Official, supported way to install uv on Actions runners.
+      # Pulls binaries from GitHub Releases; no need to allowlist astral.sh.
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+          # Ensure the cache busts whenever dependency resolution changes.
+          cache-dependency-glob: |
+            pyproject.toml
+            uv.lock
+
+      - name: Show uv version
+        run: uv --version
+
+      # Install project environment strictly from your committed lockfile,
+      # including dev deps (pytest/ruff/etc.).
+      - name: Sync project (locked + dev)
+        run: uv sync --locked --dev
