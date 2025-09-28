@@ -357,6 +357,7 @@ def collect_file_info_with_tokens(
     tracked_files: set[str] | None,
     include_patterns: list[str] | None = None,
     exclude_patterns: list[str] | None = None,
+    original_cwd: Path | None = None,
 ) -> list[FileInfo]:
     """
     Collect file information including token counts for all files.
@@ -367,6 +368,7 @@ def collect_file_info_with_tokens(
         tracked_files (Optional[Set[str]]): The set of tracked files.
         include_patterns (Optional[List[str]]): The list of include glob patterns.
         exclude_patterns (Optional[List[str]]): The list of exclude glob patterns.
+        original_cwd (Optional[Path]): The original working directory for pattern matching.
 
     Returns:
         List[FileInfo]: List of FileInfo objects with token counts.
@@ -376,6 +378,9 @@ def collect_file_info_with_tokens(
 
     include_patterns = include_patterns or []
     exclude_patterns = exclude_patterns or []
+    
+    # Use original_cwd if provided, otherwise fall back to root_path for compatibility  
+    pattern_base_path = original_cwd if original_cwd else root_path
 
     for dirpath, dirnames, filenames in os.walk(root_path):
         current_dir = Path(dirpath)
@@ -387,7 +392,12 @@ def collect_file_info_with_tokens(
             if is_ignored(full_file_path, gitignore_specs, root_path, tracked_files):
                 continue
 
-            rel_path = full_file_path.relative_to(root_path).as_posix()
+            # Calculate path relative to the pattern base (original cwd)
+            try:
+                rel_path = full_file_path.relative_to(pattern_base_path).as_posix()
+            except ValueError:
+                # If file is not relative to pattern_base_path, fall back to root_path
+                rel_path = full_file_path.relative_to(root_path).as_posix()
 
             # Apply include/exclude filters
             if not should_include_file(rel_path, include_patterns, exclude_patterns):
@@ -563,6 +573,7 @@ def generate_tree(
     gitignore_specs: dict[str, PathSpec],
     tracked_files: set[str] | None = None,
     exclude_patterns: list[str] | None = None,
+    original_cwd: Path | None = None,
 ) -> str:
     """
     Generate a folder structure tree.
@@ -576,6 +587,7 @@ def generate_tree(
         gitignore_specs (Dict[str, PathSpec]): The gitignore specifications.
         tracked_files (Optional[Set[str]]): The set of tracked files (if applicable).
         exclude_patterns (Optional[List[str]]): Glob patterns to exclude files/directories.
+        original_cwd (Optional[Path]): The original working directory for pattern matching.
 
     Returns:
         str: The generated folder structure tree.
@@ -583,6 +595,9 @@ def generate_tree(
     print("Generating folder structure tree...", file=sys.stderr)
     tree_lines = [root_path.name or str(root_path)]
     exclude_patterns = exclude_patterns or []
+    
+    # Use original_cwd if provided, otherwise fall back to root_path for compatibility
+    pattern_base_path = original_cwd if original_cwd else root_path
 
     def _tree(dir_path: Path, prefix: str = ""):
         visible_entries = _get_visible_entries(
@@ -591,7 +606,13 @@ def generate_tree(
         for idx, entry in enumerate(visible_entries):
             connector = "└── " if idx == len(visible_entries) - 1 else "├── "
             if entry.is_dir():
-                rel_path = entry.relative_to(root_path).as_posix()
+                # Calculate path relative to the pattern base (original cwd)
+                try:
+                    rel_path = entry.relative_to(pattern_base_path).as_posix()
+                except ValueError:
+                    # If entry is not relative to pattern_base_path, fall back to root_path
+                    rel_path = entry.relative_to(root_path).as_posix()
+                
                 # Check if the directory is excluded by the -e option.
                 if exclude_patterns and matches_any_pattern(rel_path, exclude_patterns):
                     tree_lines.append(prefix + connector + entry.name)
@@ -608,7 +629,19 @@ def generate_tree(
                     extension = "    " if idx == len(visible_entries) - 1 else "│   "
                     _tree(entry, prefix + extension)
             else:
-                tree_lines.append(prefix + connector + entry.name)
+                # Calculate path relative to the pattern base (original cwd) for files too
+                try:
+                    rel_path = entry.relative_to(pattern_base_path).as_posix()
+                except ValueError:
+                    # If entry is not relative to pattern_base_path, fall back to root_path
+                    rel_path = entry.relative_to(root_path).as_posix()
+                
+                # Check if the file is excluded by the -e option.
+                if exclude_patterns and matches_any_pattern(rel_path, exclude_patterns):
+                    # Skip excluded files
+                    continue
+                else:
+                    tree_lines.append(prefix + connector + entry.name)
 
     _tree(root_path)
     return "\n".join(tree_lines)
@@ -622,6 +655,7 @@ def collect_files_content(
     include_patterns: list[str] | None = None,
     exclude_patterns: list[str] | None = None,
     line_numbers: bool = False,
+    original_cwd: Path | None = None,
 ) -> tuple[list[str], list[str]]:
     """
     Collect the contents of text files (skipping binary files) based on ignore rules
@@ -635,6 +669,7 @@ def collect_files_content(
         include_patterns (Optional[List[str]]): The list of include glob patterns.
         exclude_patterns (Optional[List[str]]): The list of exclude glob patterns.
         line_numbers (bool): If True, adds line numbers to file contents.
+        original_cwd (Optional[Path]): The original working directory for pattern matching.
 
     Returns:
         Tuple[List[str], List[str]]: A tuple containing the file sections and unrecognized files.
@@ -645,6 +680,9 @@ def collect_files_content(
 
     include_patterns = include_patterns or []
     exclude_patterns = exclude_patterns or []
+    
+    # Use original_cwd if provided, otherwise fall back to root_path for compatibility  
+    pattern_base_path = original_cwd if original_cwd else root_path
 
     for dirpath, _, filenames in os.walk(root_path):
         for filename in filenames:
@@ -657,7 +695,12 @@ def collect_files_content(
             if output_file and (full_file_path.name == Path(output_file).name):
                 continue
 
-            rel_path = full_file_path.relative_to(root_path).as_posix()
+            # Calculate path relative to the pattern base (original cwd)
+            try:
+                rel_path = full_file_path.relative_to(pattern_base_path).as_posix()
+            except ValueError:
+                # If file is not relative to pattern_base_path, fall back to root_path
+                rel_path = full_file_path.relative_to(root_path).as_posix()
 
             # Apply include/exclude filters.
             if not should_include_file(rel_path, include_patterns, exclude_patterns):
@@ -803,6 +846,8 @@ def main(
         top_n (Optional[int]): When used with tokens, show only top N files by token count.
     """
 
+    # Capture the original working directory for pattern matching
+    original_cwd = Path.cwd().resolve()
     root_path = root_path.resolve()
     print(f"Starting script for directory: {root_path}", file=sys.stderr)
     gitignore_specs, tracked_files = get_ignore_settings(root_path, force)
@@ -815,6 +860,7 @@ def main(
             tracked_files,
             include_patterns=list(include_patterns),
             exclude_patterns=list(exclude_patterns),
+            original_cwd=original_cwd,
         )
         tree_output = generate_tree_with_tokens(
             root_path,
@@ -830,7 +876,7 @@ def main(
     else:
         # Use regular tree generation
         tree_output = generate_tree(
-            root_path, gitignore_specs, tracked_files, list(exclude_patterns)
+            root_path, gitignore_specs, tracked_files, list(exclude_patterns), original_cwd
         )
 
         if tree_only:
@@ -847,6 +893,7 @@ def main(
                 include_patterns=list(include_patterns),
                 exclude_patterns=list(exclude_patterns),
                 line_numbers=not no_line_numbers,
+                original_cwd=original_cwd,
             )
 
     if output_file:
