@@ -1,61 +1,58 @@
 #!/usr/bin/env python3
-"""Simple test for exclusion pattern behavior."""
+"""Parametrized test for inclusion and exclusion pattern behavior."""
 
 import tempfile
 from pathlib import Path
 
+import pytest
+
 from gpt_copy.gpt_copy import generate_tree
 
 
-def test_file_exclusion():
-    """Test that file exclusion patterns work in tree generation."""
+@pytest.mark.parametrize(
+    "pattern_type,patterns,expected_in,expected_out",
+    [
+        # Exclusion patterns
+        ("exclude", ["dropbox/file.txt"], ["dropbox", "other.txt"], ["file.txt"]),
+        ("exclude", ["dropbox/*"], ["dropbox", "other.txt"], ["file.txt"]),
+        ("exclude", ["dropbox"], ["other.txt"], []),  # dropbox shown compressed
+        # Inclusion patterns
+        ("include", ["*.txt"], ["other.txt"], ["dropbox"]),  # only txt files included
+        ("include", ["dropbox/*"], ["dropbox", "file.txt"], ["other.txt"]),
+        ("include", ["other.txt"], ["other.txt"], ["dropbox", "file.txt"]),
+    ],
+)
+def test_pattern_filtering(pattern_type, patterns, expected_in, expected_out):
+    """Test that inclusion and exclusion patterns work correctly in tree generation."""
     with tempfile.TemporaryDirectory() as temp_dir:
         temp_path = Path(temp_dir)
 
-        # Create structure: temp_dir/dropbox/file.txt
+        # Create test structure: temp_dir/dropbox/file.txt and temp_dir/other.txt
         dropbox_dir = temp_path / "dropbox"
         dropbox_dir.mkdir()
         (dropbox_dir / "file.txt").write_text("content")
         (temp_path / "other.txt").write_text("other")
 
-        # Test excluding specific file
-        result = generate_tree(temp_path, {}, None, ["dropbox/file.txt"])
-        assert "dropbox" in result
-        assert "file.txt" not in result
-        assert "other.txt" in result
+        # Apply patterns based on type
+        if pattern_type == "exclude":
+            result = generate_tree(temp_path, {}, None, patterns, None)
+        else:  # include
+            result = generate_tree(temp_path, {}, None, None, patterns)
 
+        # Check expected inclusions
+        for item in expected_in:
+            assert item in result, (
+                f"{item} should be in result for {pattern_type} patterns {patterns}"
+            )
 
-def test_wildcard_exclusion():
-    """Test that wildcard exclusion patterns work."""
-    with tempfile.TemporaryDirectory() as temp_dir:
-        temp_path = Path(temp_dir)
-
-        # Create structure: temp_dir/dropbox/file.txt
-        dropbox_dir = temp_path / "dropbox"
-        dropbox_dir.mkdir()
-        (dropbox_dir / "file.txt").write_text("content")
-        (temp_path / "other.txt").write_text("other")
-
-        # Test excluding files in directory
-        result = generate_tree(temp_path, {}, None, ["dropbox/*"])
-        assert "dropbox" in result
-        assert "file.txt" not in result
-        assert "other.txt" in result
-
-
-def test_directory_exclusion():
-    """Test that directory exclusion shows compressed view."""
-    with tempfile.TemporaryDirectory() as temp_dir:
-        temp_path = Path(temp_dir)
-
-        # Create structure: temp_dir/dropbox/file.txt
-        dropbox_dir = temp_path / "dropbox"
-        dropbox_dir.mkdir()
-        (dropbox_dir / "file.txt").write_text("content")
-        (temp_path / "other.txt").write_text("other")
-
-        # Test excluding directory itself
-        result = generate_tree(temp_path, {}, None, ["dropbox"])
-        assert "dropbox" in result
-        assert "other.txt" in result
-        # Directory should show in compressed form (we can see file but spacing is different)
+        # Check expected exclusions
+        for item in expected_out:
+            if (
+                item != "dropbox"
+                or pattern_type != "exclude"
+                or "dropbox" not in patterns
+            ):
+                # Special case: dropbox directory appears compressed when excluded
+                assert item not in result, (
+                    f"{item} should not be in result for {pattern_type} patterns {patterns}"
+                )

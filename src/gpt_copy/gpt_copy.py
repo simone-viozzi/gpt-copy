@@ -563,6 +563,7 @@ def generate_tree(
     gitignore_specs: dict[str, PathSpec],
     tracked_files: set[str] | None = None,
     exclude_patterns: list[str] | None = None,
+    include_patterns: list[str] | None = None,
 ) -> str:
     """
     Generate a folder structure tree.
@@ -576,6 +577,7 @@ def generate_tree(
         gitignore_specs (Dict[str, PathSpec]): The gitignore specifications.
         tracked_files (Optional[Set[str]]): The set of tracked files (if applicable).
         exclude_patterns (Optional[List[str]]): Glob patterns to exclude files/directories.
+        include_patterns (Optional[List[str]]): Glob patterns to include files/directories.
 
     Returns:
         str: The generated folder structure tree.
@@ -583,6 +585,7 @@ def generate_tree(
     print("Generating folder structure tree...", file=sys.stderr)
     tree_lines = [root_path.name or str(root_path)]
     exclude_patterns = exclude_patterns or []
+    include_patterns = include_patterns or []
 
     def _tree(dir_path: Path, prefix: str = ""):
         visible_entries = _get_visible_entries(
@@ -592,8 +595,12 @@ def generate_tree(
             connector = "└── " if idx == len(visible_entries) - 1 else "├── "
             if entry.is_dir():
                 rel_path = entry.relative_to(root_path).as_posix()
-                # Check if the directory is excluded by the -e option.
+
+                # For directories with include patterns, we need special logic:
+                # - Always exclude if matches exclude patterns
+                # - If there are include patterns, show directory if it might contain matching files
                 if exclude_patterns and matches_any_pattern(rel_path, exclude_patterns):
+                    # Directory excluded by exclusion pattern - show compressed
                     tree_lines.append(prefix + connector + entry.name)
                     comp_lines = _compress_directory(
                         entry,
@@ -603,14 +610,34 @@ def generate_tree(
                         prefix + "    ",
                     )
                     tree_lines.extend(comp_lines)
+                elif include_patterns:
+                    # With include patterns, show directory if:
+                    # 1. Directory itself matches include pattern, OR
+                    # 2. Directory might contain files that match include patterns
+                    dir_matches = matches_any_pattern(rel_path, include_patterns)
+                    potential_children_match = any(
+                        pattern.startswith(rel_path + "/") or "/" in pattern
+                        for pattern in include_patterns
+                    )
+
+                    if dir_matches or potential_children_match:
+                        tree_lines.append(prefix + connector + entry.name)
+                        extension = (
+                            "    " if idx == len(visible_entries) - 1 else "│   "
+                        )
+                        _tree(entry, prefix + extension)
+                    # Skip directory if it doesn't match and can't contain matches
                 else:
+                    # No include patterns, normal behavior
                     tree_lines.append(prefix + connector + entry.name)
                     extension = "    " if idx == len(visible_entries) - 1 else "│   "
                     _tree(entry, prefix + extension)
             else:
-                # Check if the file is excluded by the -e option.
+                # Check if the file should be included/excluded
                 rel_path = entry.relative_to(root_path).as_posix()
-                if exclude_patterns and matches_any_pattern(rel_path, exclude_patterns):
+                if not should_include_file(
+                    rel_path, include_patterns, exclude_patterns
+                ):
                     # Skip excluded files
                     continue
                 tree_lines.append(prefix + connector + entry.name)
@@ -835,7 +862,11 @@ def main(
     else:
         # Use regular tree generation
         tree_output = generate_tree(
-            root_path, gitignore_specs, tracked_files, list(exclude_patterns)
+            root_path,
+            gitignore_specs,
+            tracked_files,
+            list(exclude_patterns),
+            list(include_patterns),
         )
 
         if tree_only:
