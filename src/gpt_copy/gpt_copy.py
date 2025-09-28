@@ -378,8 +378,8 @@ def collect_file_info_with_tokens(
 
     include_patterns = include_patterns or []
     exclude_patterns = exclude_patterns or []
-    
-    # Use original_cwd if provided, otherwise fall back to root_path for compatibility  
+
+    # Use original_cwd if provided, otherwise fall back to root_path for compatibility
     pattern_base_path = original_cwd if original_cwd else root_path
 
     for dirpath, dirnames, filenames in os.walk(root_path):
@@ -595,7 +595,7 @@ def generate_tree(
     print("Generating folder structure tree...", file=sys.stderr)
     tree_lines = [root_path.name or str(root_path)]
     exclude_patterns = exclude_patterns or []
-    
+
     # Use original_cwd if provided, otherwise fall back to root_path for compatibility
     pattern_base_path = original_cwd if original_cwd else root_path
 
@@ -612,7 +612,7 @@ def generate_tree(
                 except ValueError:
                     # If entry is not relative to pattern_base_path, fall back to root_path
                     rel_path = entry.relative_to(root_path).as_posix()
-                
+
                 # Check if the directory is excluded by the -e option.
                 if exclude_patterns and matches_any_pattern(rel_path, exclude_patterns):
                     tree_lines.append(prefix + connector + entry.name)
@@ -635,7 +635,7 @@ def generate_tree(
                 except ValueError:
                     # If entry is not relative to pattern_base_path, fall back to root_path
                     rel_path = entry.relative_to(root_path).as_posix()
-                
+
                 # Check if the file is excluded by the -e option.
                 if exclude_patterns and matches_any_pattern(rel_path, exclude_patterns):
                     # Skip excluded files
@@ -680,8 +680,8 @@ def collect_files_content(
 
     include_patterns = include_patterns or []
     exclude_patterns = exclude_patterns or []
-    
-    # Use original_cwd if provided, otherwise fall back to root_path for compatibility  
+
+    # Use original_cwd if provided, otherwise fall back to root_path for compatibility
     pattern_base_path = original_cwd if original_cwd else root_path
 
     for dirpath, _, filenames in os.walk(root_path):
@@ -876,7 +876,11 @@ def main(
     else:
         # Use regular tree generation
         tree_output = generate_tree(
-            root_path, gitignore_specs, tracked_files, list(exclude_patterns), original_cwd
+            root_path,
+            gitignore_specs,
+            tracked_files,
+            list(exclude_patterns),
+            original_cwd,
         )
 
         if tree_only:
