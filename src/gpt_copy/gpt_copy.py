@@ -41,7 +41,7 @@ def count_tokens_safe(text: str) -> int:
 
         enc = tiktoken.encoding_for_model("gpt-4o")
         tokens = enc.encode(text)
-        return len(tokens)
+        return max(1, len(tokens))
     except Exception:
         # Fallback to simple estimation if tiktoken fails
         # Rough approximation: ~4 characters per token for English text
