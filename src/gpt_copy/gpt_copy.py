@@ -518,29 +518,20 @@ def generate_tree_with_tokens(
     if root_tokens > 0:
         tree_lines[0] = f"{root_path.name or str(root_path)} ({root_tokens} tokens)"
 
-    def _add_tree_items(
-        items: DirStructure, prefix: str = "", is_last_at_level: bool = True
-    ):
+    def _add_tree_items(items: DirStructure, prefix: str = ""):
         """Recursively add tree items with token counts."""
-        # Separate directories and files, then sort each group
-        directories = []
-        files = []
+        # Collect all items with their token counts
+        all_items: list[tuple[str, FileInfo | DirStructure, int, bool]] = []
 
         for name, item in items.items():
             if isinstance(item, dict):
                 dir_tokens = calculate_directory_tokens(item)
-                directories.append((name, item, dir_tokens))
+                all_items.append((name, item, dir_tokens, True))
             else:
-                files.append((name, item, item.token_count))
+                all_items.append((name, item, item.token_count, False))
 
-        # Sort directories by token count (descending), then files by token count (descending)
-        directories.sort(key=lambda x: x[2], reverse=True)
-        files.sort(key=lambda x: x[2], reverse=True)
-
-        # Combine directories and files - directories first, then files (both sorted by tokens)
-        all_items = [
-            (name, item, tokens, True) for name, item, tokens in directories
-        ] + [(name, item, tokens, False) for name, item, tokens in files]
+        # Sort all items by token count (descending)
+        all_items.sort(key=lambda x: x[2], reverse=True)
 
         for idx, (name, item, tokens, is_dir) in enumerate(all_items):
             is_last = idx == len(all_items) - 1
@@ -550,7 +541,7 @@ def generate_tree_with_tokens(
                 # Directory with token count
                 tree_lines.append(f"{prefix}{connector}{name}/ ({tokens} tokens)")
                 extension = "    " if is_last else "│   "
-                _add_tree_items(item, prefix + extension, is_last)
+                _add_tree_items(cast(DirStructure, item), prefix + extension)
             else:
                 # File with token count
                 tree_lines.append(f"{prefix}{connector}{name} ({tokens} tokens)")
