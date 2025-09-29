@@ -201,7 +201,7 @@ dependencies = [
     { name = "tqdm" },
 ]
 
-[package.optional-dependencies]
+[package.dev-dependencies]
 dev = [
     { name = "pre-commit" },
     { name = "pytest" },
@@ -212,14 +212,17 @@ dev = [
 requires-dist = [
     { name = "click" },
     { name = "pathspec" },
-    { name = "pre-commit", marker = "extra == 'dev'" },
     { name = "pygit2" },
-    { name = "pytest", marker = "extra == 'dev'" },
-    { name = "ruff", marker = "extra == 'dev'" },
     { name = "tiktoken" },
     { name = "tqdm" },
 ]
-provides-extras = ["dev"]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "pre-commit" },
+    { name = "pytest" },
+    { name = "ruff" },
+]
 
 [[package]]
 name = "identify"
