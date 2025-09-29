@@ -529,7 +529,7 @@ def generate_tree(
             tree_lines[0] += f" ({root_tokens} tokens)"
 
     def _add_tree_items(items: DirStructure, prefix: str = "", current_rel: str = ""):
-        all_items = []
+        all_items: list[tuple[str, DirStructure | FileInfo, int, bool, str]] = []
         for name, item in items.items():
             rel = current_rel + "/" + name if current_rel else name
             if isinstance(item, dict):
@@ -550,7 +550,11 @@ def generate_tree(
                 if exclude_patterns and matches_any_pattern(rel, exclude_patterns):
                     # Show compressed
                     tree_lines.append(prefix + connector + name)
-                    children = list(item.values())
+                    assert isinstance(item, dict)
+                    children: list[FileInfo] = []
+                    for value in item.values():
+                        if isinstance(value, FileInfo):
+                            children.append(value)
                     max_items = 3
                     for i, child in enumerate(children[:max_items]):
                         child_connector = (
