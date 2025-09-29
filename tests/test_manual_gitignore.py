@@ -10,6 +10,7 @@ from gpt_copy.gpt_copy import (
     generate_tree,
     collect_gitignore_specs,
     collect_files_content,
+    collect_file_info,
     main,
     is_ignored,
 )
@@ -61,7 +62,8 @@ def test_infer_language():
 def test_generate_tree(temp_directory: Path):
     """Ensure directory tree generation works correctly using .gitignore rules."""
     gitignore_specs = collect_gitignore_specs(temp_directory)
-    tree = generate_tree(temp_directory, gitignore_specs, tracked_files=None)
+    file_infos = collect_file_info(temp_directory, gitignore_specs, tracked_files=None)
+    tree = generate_tree(temp_directory, file_infos, with_tokens=False)
 
     assert "file.py" in tree
     # Since the .gitignore in this fixture ignores subdir/, it should NOT appear in the tree.

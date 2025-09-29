@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from gpt_copy.gpt_copy import generate_tree
+from gpt_copy.gpt_copy import generate_tree, collect_file_info
 
 
 @pytest.mark.parametrize(
@@ -35,9 +35,15 @@ def test_pattern_filtering(pattern_type, patterns, expected_in, expected_out):
 
         # Apply patterns based on type
         if pattern_type == "exclude":
-            result = generate_tree(temp_path, {}, None, patterns, None)
+            file_infos = collect_file_info(temp_path, {}, None, None, patterns)
+            result = generate_tree(
+                temp_path, file_infos, with_tokens=False, exclude_patterns=patterns
+            )
         else:  # include
-            result = generate_tree(temp_path, {}, None, None, patterns)
+            file_infos = collect_file_info(temp_path, {}, None, patterns, None)
+            result = generate_tree(
+                temp_path, file_infos, with_tokens=False, exclude_patterns=None
+            )
 
         # Check expected inclusions
         for item in expected_in:

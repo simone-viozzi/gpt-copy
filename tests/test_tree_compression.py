@@ -1,5 +1,5 @@
 from pathlib import Path
-from gpt_copy.gpt_copy import generate_tree
+from gpt_copy.gpt_copy import generate_tree, collect_file_info
 
 
 def test_generate_tree_excluded(tmp_path: Path):
@@ -30,9 +30,14 @@ def test_generate_tree_excluded(tmp_path: Path):
     # Use an exclude pattern that matches the 'exclude_dir' directory.
     exclude_patterns = ["exclude_dir"]
 
+    # Collect file infos
+    file_infos = collect_file_info(
+        root, gitignore_specs, tracked_files, exclude_patterns=exclude_patterns
+    )
+
     # Generate the tree using the new compressed view for excluded directories.
     tree_output = generate_tree(
-        root, gitignore_specs, tracked_files, exclude_patterns=exclude_patterns
+        root, file_infos, with_tokens=False, exclude_patterns=exclude_patterns
     )
 
     # Debug print (optional)
