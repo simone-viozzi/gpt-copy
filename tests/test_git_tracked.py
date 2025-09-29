@@ -9,6 +9,7 @@ from gpt_copy.gpt_copy import (
     main,
     generate_tree,
     collect_files_content,
+    collect_file_info,
 )
 from collections.abc import Generator
 
@@ -96,7 +97,8 @@ def test_generate_tree_git(git_repo: Path):
     repo = pygit2.Repository(git_repo.as_posix())
     tracked_files = get_tracked_files(repo)
 
-    tree = generate_tree(git_repo, {}, tracked_files)
+    file_infos = collect_file_info(git_repo, {}, tracked_files)
+    tree = generate_tree(git_repo, file_infos, with_tokens=False)
 
     assert "file.py" in tree
     assert "file.txt" in tree

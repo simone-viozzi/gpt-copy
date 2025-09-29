@@ -30,15 +30,9 @@ pkgs.mkShell rec {
     uv
   ];
 
-  postVenvCreation = ''
-    unset SOURCE_DATE_EPOCH
-  '';
-
   pre-commit = pkgs.pre-commit;
 
   postShellHook = ''
-    unset SOURCE_DATE_EPOCH
-
     export PKG_CONFIG_PATH="${pkgs.openssl.dev}/lib/pkgconfig:$PKG_CONFIG_PATH"
 
     echo "Environment setup complete. UV and hatchling are available."

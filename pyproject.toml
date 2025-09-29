@@ -6,7 +6,7 @@ readme = "readme.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }
 authors = [
-    { name = "Simone Viozzi", email = "simone.viozzi@gmail.com" }
+    { name = "Simone Viozzi", email = "simoneviozzi97@gmail.com" }
 ]
 
 dependencies = [
@@ -17,7 +17,7 @@ dependencies = [
     "tiktoken"
 ]
 
-[project.optional-dependencies]
+[dependency-groups]
 dev = [
     "pytest",
     "ruff",
