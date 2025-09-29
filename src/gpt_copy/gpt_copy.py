@@ -2,7 +2,7 @@
 import os
 import sys
 from pathlib import Path
-from typing import TextIO
+from typing import TextIO, Union, cast
 import importlib.metadata
 
 import click
@@ -24,6 +24,10 @@ class FileInfo:
     relative_path: str
     token_count: int
     is_directory: bool = False
+
+
+# Type alias for nested directory structure
+DirStructure = dict[str, Union[FileInfo, "DirStructure"]]
 
 
 def count_tokens_safe(text: str) -> int:
@@ -377,7 +381,7 @@ def collect_file_info_with_tokens(
     include_patterns = include_patterns or []
     exclude_patterns = exclude_patterns or []
 
-    for dirpath, dirnames, filenames in os.walk(root_path):
+    for dirpath, _, filenames in os.walk(root_path):
         current_dir = Path(dirpath)
 
         # Process files in current directory
@@ -429,7 +433,9 @@ def collect_file_info_with_tokens(
     return file_infos
 
 
-def calculate_directory_tokens(dir_structure, path_parts=()):
+def calculate_directory_tokens(
+    dir_structure: DirStructure, path_parts: tuple[str, ...] = ()
+) -> int:
     """
     Calculate total tokens for directories recursively.
 
@@ -484,20 +490,20 @@ def generate_tree_with_tokens(
         top_files_set = {f.relative_path for f in top_files}
 
     # Create a mapping of directories to their files
-    dir_structure = {}
+    dir_structure: DirStructure = {}
     for file_info in file_infos:
         # If top_n is specified, only include files in the top N
         if top_files_set is not None and file_info.relative_path not in top_files_set:
             continue
 
         parts = Path(file_info.relative_path).parts
-        current = dir_structure
+        current: DirStructure = dir_structure
 
         # Build directory structure
-        for i, part in enumerate(parts[:-1]):
+        for part in parts[:-1]:
             if part not in current:
                 current[part] = {}
-            current = current[part]
+            current = cast(DirStructure, current[part])
 
         # Add file to its directory
         if len(parts) > 0:
@@ -512,7 +518,9 @@ def generate_tree_with_tokens(
     if root_tokens > 0:
         tree_lines[0] = f"{root_path.name or str(root_path)} ({root_tokens} tokens)"
 
-    def _add_tree_items(items, prefix="", is_last_at_level=True):
+    def _add_tree_items(
+        items: DirStructure, prefix: str = "", is_last_at_level: bool = True
+    ):
         """Recursively add tree items with token counts."""
         # Separate directories and files, then sort each group
         directories = []
