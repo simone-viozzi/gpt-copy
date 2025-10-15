@@ -25,7 +25,7 @@ jobs:
       # Official, supported way to install uv on Actions runners.
       # Pulls binaries from GitHub Releases; no need to allowlist astral.sh.
       - name: Install uv
-        uses: astral-sh/setup-uv@v6
+        uses: astral-sh/setup-uv@v7
         with:
           enable-cache: true
           # Ensure the cache busts whenever dependency resolution changes.
