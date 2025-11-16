@@ -452,8 +452,8 @@ def collect_file_info(
 def generate_tree(
     root_path: Path,
     file_infos: list[FileInfo],
+    filter_engine: FilterEngine,
     with_tokens: bool = False,
-    filter_engine: FilterEngine | None = None,
     top_n: int | None = None,
 ) -> str:
     """
@@ -462,8 +462,8 @@ def generate_tree(
     Args:
         root_path (Path): The root path to start generating the tree.
         file_infos (List[FileInfo]): List of file and directory information.
-        with_tokens (bool): If True, show token counts in the tree.
         filter_engine (FilterEngine): Filter engine for checking excluded dirs.
+        with_tokens (bool): If True, show token counts in the tree.
         top_n (Optional[int]): Show only top N files by token count (only when with_tokens=True).
 
     Returns:
