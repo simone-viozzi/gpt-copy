@@ -68,7 +68,9 @@ def test_generate_tree(temp_directory: Path):
     file_infos = collect_file_info(
         temp_directory, gitignore_specs, tracked_files=None, filter_engine=filter_engine
     )
-    tree = generate_tree(temp_directory, file_infos, with_tokens=False)
+    tree = generate_tree(
+        temp_directory, file_infos, with_tokens=False, filter_engine=filter_engine
+    )
 
     assert "file.py" in tree
     # Since the .gitignore in this fixture ignores subdir/, it should NOT appear in the tree.

@@ -100,7 +100,9 @@ def test_generate_tree_git(git_repo: Path):
 
     filter_engine = FilterEngine([])
     file_infos = collect_file_info(git_repo, {}, tracked_files, filter_engine)
-    tree = generate_tree(git_repo, file_infos, with_tokens=False)
+    tree = generate_tree(
+        git_repo, file_infos, with_tokens=False, filter_engine=filter_engine
+    )
 
     assert "file.py" in tree
     assert "file.txt" in tree

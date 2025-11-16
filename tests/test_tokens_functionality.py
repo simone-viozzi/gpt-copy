@@ -96,6 +96,7 @@ class TestTokensCounting:
                 temp_path,
                 file_infos,
                 with_tokens=True,
+                filter_engine=filter_engine,
             )
 
             # Check output contains token counts
@@ -133,6 +134,7 @@ class TestTokensCounting:
                 temp_path,
                 file_infos,
                 with_tokens=True,
+                filter_engine=filter_engine,
                 top_n=3,
             )
 

@@ -463,7 +463,7 @@ def generate_tree(
         root_path (Path): The root path to start generating the tree.
         file_infos (List[FileInfo]): List of file and directory information.
         with_tokens (bool): If True, show token counts in the tree.
-        filter_engine (Optional[FilterEngine]): Filter engine for checking excluded dirs.
+        filter_engine (FilterEngine): Filter engine for checking excluded dirs.
         top_n (Optional[int]): Show only top N files by token count (only when with_tokens=True).
 
     Returns:
@@ -531,8 +531,6 @@ def generate_tree(
 
     def _is_excluded_dir(rel_path: str) -> bool:
         """Check if a directory is excluded (for compression)."""
-        if not filter_engine:
-            return False
         action = filter_engine.effective_action(rel_path, is_dir=True)
         return action == Action.EXCLUDE
 
