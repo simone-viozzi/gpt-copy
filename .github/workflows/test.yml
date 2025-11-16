@@ -4,11 +4,6 @@ on:
   pull_request:
     branches:
       - main
-      - master
-  push:
-    branches:
-      - main
-      - master
   workflow_dispatch:
 
 jobs:
@@ -26,12 +21,7 @@ jobs:
         uses: astral-sh/setup-uv@v7
         with:
           enable-cache: true
-          cache-dependency-glob: |
-            pyproject.toml
-            uv.lock
-
-      - name: Show uv version
-        run: uv --version
+          cache-dependency-glob: uv.lock
 
       - name: Sync project (locked + dev)
         run: uv sync --locked --dev
@@ -44,6 +34,5 @@ jobs:
         with:
           file: ./coverage.xml
           flags: unittests
-          name: codecov-umbrella
           fail_ci_if_error: false
           token: ${{ secrets.CODECOV_TOKEN }}
