@@ -86,7 +86,7 @@ def test_tokens_with_top_n():
 
 
 def test_tokens_with_include_filter():
-    """Test --tokens with file filtering."""
+    """Test --tokens with file filtering using new last-match-wins semantics."""
     print("Testing --tokens with include filters...")
 
     with tempfile.TemporaryDirectory() as temp_dir:
@@ -97,9 +97,10 @@ def test_tokens_with_include_filter():
         (temp_path / "app.js").write_text("console.log('javascript');")
         (temp_path / "readme.txt").write_text("This is documentation")
 
-        # Run gpt-copy with --tokens and Python filter
+        # Run gpt-copy with --tokens and exclude all then include Python
+        # New behavior: must exclude all first, then include specific patterns
         returncode, stdout, stderr = run_gpt_copy_command(
-            [str(temp_path), "--tokens", "--include", "*.py"]
+            [str(temp_path), "--tokens", "--exclude", "**", "--include", "*.py"]
         )
 
         assert returncode == 0, f"Command failed with stderr: {stderr}"
@@ -120,7 +121,7 @@ def test_tokens_help_option():
     assert "--tokens" in stdout, "Help should show --tokens option"
     assert "--top-n" in stdout, "Help should show --top-n option"
     assert "Display token counts" in stdout, "Help should describe --tokens"
-    assert "top N files by token count" in stdout, "Help should describe --top-n"
+    assert "top N files" in stdout, "Help should describe --top-n"
 
     print("✓ Help output includes new options")
 

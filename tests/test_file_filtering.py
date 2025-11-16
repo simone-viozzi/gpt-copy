@@ -1,14 +1,16 @@
 # File: tests/test_file_filtering.py
 
-from gpt_copy.filter import expand_braces, matches_any_pattern, should_include_file
+from gpt_copy.filter import expand_braces, FilterEngine, Rule, RuleKind, Action
 
 
 def test_expand_braces_no_braces():
+    """Test that patterns without braces are returned as-is."""
     pattern = "src/*.py"
     assert expand_braces(pattern) == [pattern]
 
 
 def test_expand_braces_simple():
+    """Test simple brace expansion."""
     pattern = "src/{file1,file2}.py"
     expanded = expand_braces(pattern)
     assert "src/file1.py" in expanded
@@ -16,20 +18,44 @@ def test_expand_braces_simple():
     assert len(expanded) == 2
 
 
-def test_matches_any_pattern():
-    patterns = ["src/*.py", "docs/*.md"]
-    assert matches_any_pattern("src/main.py", patterns) is True
-    assert matches_any_pattern("docs/readme.md", patterns) is True
-    assert matches_any_pattern("src/main.txt", patterns) is False
+def test_filter_engine_with_braces():
+    """Test that FilterEngine supports brace expansion in patterns."""
+    # Create a rule with brace expansion
+    rules = [Rule(kind=RuleKind.INCLUDE, pattern="src/{file1,file2}.py")]
+    engine = FilterEngine(rules)
+
+    # Both expanded patterns should match
+    assert engine.effective_action("src/file1.py", is_dir=False) == Action.INCLUDE
+    assert engine.effective_action("src/file2.py", is_dir=False) == Action.INCLUDE
+    # Non-matching patterns should use default (INCLUDE with no other rules)
+    assert engine.effective_action("src/file3.py", is_dir=False) == Action.INCLUDE
 
 
-def test_should_include_file_with_includes_excludes():
-    includes = ["src/*.py"]
-    excludes = ["src/__init__.py"]
-    # Should include: matches include and is not excluded.
-    assert should_include_file("src/main.py", includes, excludes) is True
-    # Should exclude: even though it matches include, it is explicitly excluded.
-    assert should_include_file("src/__init__.py", includes, excludes) is False
-    # With no includes, a file is included unless it is excluded.
-    assert should_include_file("docs/readme.md", [], ["docs/*.md"]) is False
-    assert should_include_file("docs/readme.md", [], []) is True
+def test_filter_engine_last_match_wins():
+    """Test that FilterEngine implements last-match-wins semantics."""
+    # Create rules: include *.py, then exclude __init__.py
+    rules = [
+        Rule(kind=RuleKind.INCLUDE, pattern="src/*.py"),
+        Rule(kind=RuleKind.EXCLUDE, pattern="src/__init__.py"),
+    ]
+    engine = FilterEngine(rules)
+
+    # src/main.py matches only first rule -> INCLUDE
+    assert engine.effective_action("src/main.py", is_dir=False) == Action.INCLUDE
+    # src/__init__.py matches both rules, last one wins -> EXCLUDE
+    assert engine.effective_action("src/__init__.py", is_dir=False) == Action.EXCLUDE
+
+
+def test_filter_engine_exclude_then_include():
+    """Test that later includes can override earlier excludes."""
+    # Create rules: exclude docs/*.md, then include docs/readme.md
+    rules = [
+        Rule(kind=RuleKind.EXCLUDE, pattern="docs/*.md"),
+        Rule(kind=RuleKind.INCLUDE, pattern="docs/readme.md"),
+    ]
+    engine = FilterEngine(rules)
+
+    # docs/readme.md matches both, last match wins -> INCLUDE
+    assert engine.effective_action("docs/readme.md", is_dir=False) == Action.INCLUDE
+    # docs/other.md matches only first rule -> EXCLUDE
+    assert engine.effective_action("docs/other.md", is_dir=False) == Action.EXCLUDE

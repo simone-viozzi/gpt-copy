@@ -16,6 +16,7 @@ from gpt_copy.gpt_copy import (
     generate_tree,
     get_ignore_settings,
 )
+from gpt_copy.filter import FilterEngine
 
 
 class TestTokensCounting:
@@ -47,13 +48,13 @@ class TestTokensCounting:
             # Get ignore settings
             gitignore_specs, tracked_files = get_ignore_settings(temp_path, force=True)
 
-            # Collect file info
+            # Collect file info (no filter rules = include all)
+            filter_engine = FilterEngine([])
             file_infos = collect_file_info(
                 temp_path,
                 gitignore_specs,
                 tracked_files,
-                include_patterns=None,
-                exclude_patterns=None,
+                filter_engine=filter_engine,
             )
 
             # Check results
@@ -82,12 +83,12 @@ class TestTokensCounting:
             gitignore_specs, tracked_files = get_ignore_settings(temp_path, force=True)
 
             # Collect file infos
+            filter_engine = FilterEngine([])
             file_infos = collect_file_info(
                 temp_path,
                 gitignore_specs,
                 tracked_files,
-                include_patterns=None,
-                exclude_patterns=None,
+                filter_engine=filter_engine,
             )
 
             # Generate tree with tokens
@@ -95,6 +96,7 @@ class TestTokensCounting:
                 temp_path,
                 file_infos,
                 with_tokens=True,
+                filter_engine=filter_engine,
             )
 
             # Check output contains token counts
@@ -119,12 +121,12 @@ class TestTokensCounting:
             gitignore_specs, tracked_files = get_ignore_settings(temp_path, force=True)
 
             # Collect file infos
+            filter_engine = FilterEngine([])
             file_infos = collect_file_info(
                 temp_path,
                 gitignore_specs,
                 tracked_files,
-                include_patterns=None,
-                exclude_patterns=None,
+                filter_engine=filter_engine,
             )
 
             # Generate tree with top-3
@@ -132,6 +134,7 @@ class TestTokensCounting:
                 temp_path,
                 file_infos,
                 with_tokens=True,
+                filter_engine=filter_engine,
                 top_n=3,
             )
 
@@ -163,13 +166,21 @@ class TestTokensCounting:
             # Get ignore settings
             gitignore_specs, tracked_files = get_ignore_settings(temp_path, force=True)
 
+            # Create filter engine for Python files only
+            from gpt_copy.filter import FilterEngine, Rule, RuleKind
+
+            rules = [
+                Rule(kind=RuleKind.EXCLUDE, pattern="**"),
+                Rule(kind=RuleKind.INCLUDE, pattern="*.py"),
+            ]
+            filter_engine = FilterEngine(rules)
+
             # Collect only Python files
             file_infos = collect_file_info(
                 temp_path,
                 gitignore_specs,
                 tracked_files,
-                include_patterns=["*.py"],
-                exclude_patterns=None,
+                filter_engine=filter_engine,
             )
 
             # Should only have the Python file

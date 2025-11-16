@@ -12,7 +12,12 @@ from pathspec import PathSpec
 from pathspec.patterns.gitwildmatch import GitWildMatchPattern
 from tqdm import tqdm
 
-from gpt_copy.filter import should_include_file, matches_any_pattern
+from gpt_copy.filter import (
+    FilterEngine,
+    Rule,
+    RuleKind,
+    Action,
+)
 from dataclasses import dataclass
 
 
@@ -358,27 +363,22 @@ def collect_file_info(
     root_path: Path,
     gitignore_specs: dict[str, PathSpec],
     tracked_files: set[str] | None,
-    include_patterns: list[str] | None = None,
-    exclude_patterns: list[str] | None = None,
+    filter_engine: FilterEngine,
 ) -> list[FileInfo]:
     """
-    Collect file and directory information.
+    Collect file and directory information using rule-based filtering.
 
     Args:
         root_path (Path): The root path to start collecting.
         gitignore_specs (Dict[str, PathSpec]): The gitignore specifications.
         tracked_files (Optional[Set[str]]): The set of tracked files.
-        include_patterns (Optional[List[str]]): The list of include glob patterns.
-        exclude_patterns (Optional[List[str]]): The list of exclude glob patterns.
+        filter_engine (FilterEngine): The filter engine for CLI rules.
 
     Returns:
         List[FileInfo]: List of FileInfo objects for files and directories.
     """
     print("Collecting file and directory information...", file=sys.stderr)
     file_infos: list[FileInfo] = []
-
-    include_patterns = include_patterns or []
-    exclude_patterns = exclude_patterns or []
 
     def collect_recursive(dir_path: Path):
         try:
@@ -388,56 +388,59 @@ def collect_file_info(
             return
 
         for entry in entries:
+            # Stage 1: VCS ignores (existing behavior)
             if is_ignored(entry, gitignore_specs, root_path, tracked_files):
                 continue
 
             rel_path = entry.relative_to(root_path).as_posix()
+            is_dir = entry.is_dir()
 
-            if entry.is_dir():
-                excluded = exclude_patterns and matches_any_pattern(
-                    rel_path, exclude_patterns
-                )
-                if excluded:
-                    # Add the excluded directory
+            # Stage 2: Apply CLI filter rules
+            action = filter_engine.effective_action(rel_path, is_dir)
+
+            if is_dir:
+                if action == Action.EXCLUDE:
+                    # Check if we should traverse anyway for late includes
+                    if filter_engine.may_have_late_include_descendant(rel_path):
+                        # Don't add the directory itself, but traverse it
+                        collect_recursive(entry)
+                        continue
+                    else:
+                        # Safe to prune - add compressed view
+                        file_infos.append(
+                            FileInfo(
+                                path=entry,
+                                relative_path=rel_path,
+                                is_directory=True,
+                            )
+                        )
+                        # Collect direct children for compression
+                        try:
+                            children = sorted(entry.iterdir())
+                            for child in children:
+                                if not is_ignored(
+                                    child, gitignore_specs, root_path, tracked_files
+                                ):
+                                    child_rel = child.relative_to(root_path).as_posix()
+                                    file_infos.append(
+                                        FileInfo(
+                                            path=child,
+                                            relative_path=child_rel,
+                                            is_directory=child.is_dir(),
+                                        )
+                                    )
+                        except OSError:
+                            pass
+                        continue
+                else:
+                    # INCLUDE: add directory and recurse
                     file_infos.append(
                         FileInfo(path=entry, relative_path=rel_path, is_directory=True)
                     )
-                    # Collect direct children for compression
-                    try:
-                        children = sorted(entry.iterdir())
-                        for child in children:
-                            if not is_ignored(
-                                child, gitignore_specs, root_path, tracked_files
-                            ):
-                                child_rel = child.relative_to(root_path).as_posix()
-                                file_infos.append(
-                                    FileInfo(
-                                        path=child,
-                                        relative_path=child_rel,
-                                        is_directory=child.is_dir(),
-                                    )
-                                )
-                    except OSError:
-                        pass
-                    # Don't recurse
-                else:
-                    include_dir = True
-                    if include_patterns:
-                        dir_matches = matches_any_pattern(rel_path, include_patterns)
-                        potential_children_match = any(
-                            pattern.startswith(rel_path + "/") or "/" in pattern
-                            for pattern in include_patterns
-                        )
-                        include_dir = dir_matches or potential_children_match
-                    if include_dir:
-                        file_infos.append(
-                            FileInfo(
-                                path=entry, relative_path=rel_path, is_directory=True
-                            )
-                        )
-                        collect_recursive(entry)
+                    collect_recursive(entry)
             else:
-                if should_include_file(rel_path, include_patterns, exclude_patterns):
+                # File: include if action is INCLUDE
+                if action == Action.INCLUDE:
                     file_infos.append(
                         FileInfo(path=entry, relative_path=rel_path, is_directory=False)
                     )
@@ -449,8 +452,8 @@ def collect_file_info(
 def generate_tree(
     root_path: Path,
     file_infos: list[FileInfo],
+    filter_engine: FilterEngine,
     with_tokens: bool = False,
-    exclude_patterns: list[str] | None = None,
     top_n: int | None = None,
 ) -> str:
     """
@@ -459,16 +462,14 @@ def generate_tree(
     Args:
         root_path (Path): The root path to start generating the tree.
         file_infos (List[FileInfo]): List of file and directory information.
+        filter_engine (FilterEngine): Filter engine for checking excluded dirs.
         with_tokens (bool): If True, show token counts in the tree.
-        exclude_patterns (Optional[List[str]]): Glob patterns to exclude files/directories.
         top_n (Optional[int]): Show only top N files by token count (only when with_tokens=True).
 
     Returns:
         str: The generated folder structure tree.
     """
     print("Generating folder structure tree...", file=sys.stderr)
-
-    exclude_patterns = exclude_patterns or []
 
     # Calculate tokens if needed
     token_dict: dict[str, int] = {}
@@ -528,6 +529,11 @@ def generate_tree(
         if root_tokens > 0:
             tree_lines[0] += f" ({root_tokens} tokens)"
 
+    def _is_excluded_dir(rel_path: str) -> bool:
+        """Check if a directory is excluded (for compression)."""
+        action = filter_engine.effective_action(rel_path, is_dir=True)
+        return action == Action.EXCLUDE
+
     def _add_tree_items(items: DirStructure, prefix: str = "", current_rel: str = ""):
         all_items: list[tuple[str, DirStructure | FileInfo, int, bool, str]] = []
         for name, item in items.items():
@@ -547,7 +553,7 @@ def generate_tree(
             connector = "└── " if is_last else "├── "
 
             if is_dir:
-                if exclude_patterns and matches_any_pattern(rel, exclude_patterns):
+                if _is_excluded_dir(rel):
                     # Show compressed
                     tree_lines.append(prefix + connector + name)
                     assert isinstance(item, dict)
@@ -601,21 +607,19 @@ def collect_files_content(
     gitignore_specs: dict[str, PathSpec],
     output_file: str | None,
     tracked_files: set[str] | None,
-    include_patterns: list[str] | None = None,
-    exclude_patterns: list[str] | None = None,
+    filter_engine: FilterEngine,
     line_numbers: bool = False,
 ) -> tuple[list[str], list[str]]:
     """
     Collect the contents of text files (skipping binary files) based on ignore rules
-    and the include/exclude glob patterns.
+    and the filter engine.
 
     Args:
         root_path (Path): The root path to start collecting files.
         gitignore_specs (Dict[str, PathSpec]): The gitignore specifications.
         output_file (Optional[str]): The output file path.
         tracked_files (Optional[Set[str]]): The set of tracked files.
-        include_patterns (Optional[List[str]]): The list of include glob patterns.
-        exclude_patterns (Optional[List[str]]): The list of exclude glob patterns.
+        filter_engine (FilterEngine): The filter engine for CLI rules.
         line_numbers (bool): If True, adds line numbers to file contents.
 
     Returns:
@@ -625,13 +629,11 @@ def collect_files_content(
     file_sections: list[str] = []
     unrecognized_files: list[str] = []
 
-    include_patterns = include_patterns or []
-    exclude_patterns = exclude_patterns or []
-
     for dirpath, _, filenames in os.walk(root_path):
         for filename in filenames:
             full_file_path = Path(dirpath) / filename
 
+            # Stage 1: VCS ignores
             if is_ignored(full_file_path, gitignore_specs, root_path, tracked_files):
                 continue
 
@@ -641,8 +643,9 @@ def collect_files_content(
 
             rel_path = full_file_path.relative_to(root_path).as_posix()
 
-            # Apply include/exclude filters.
-            if not should_include_file(rel_path, include_patterns, exclude_patterns):
+            # Stage 2: Apply filter engine
+            action = filter_engine.effective_action(rel_path, is_dir=False)
+            if action == Action.EXCLUDE:
                 continue
 
             if is_binary_file(full_file_path):
@@ -725,14 +728,20 @@ def write_output(
     "--include",
     "include_patterns",
     multiple=True,
-    help="Glob pattern(s) to include files (e.g., 'src/*.py', 'src/{module1,module2}.py')",
+    help="Glob pattern(s) to mark files/directories as included (repeatable)",
 )
 @click.option(
     "-e",
     "--exclude",
     "exclude_patterns",
     multiple=True,
-    help="Glob pattern(s) to exclude files (e.g., 'src/tests/*')",
+    help="Glob pattern(s) to mark files/directories as excluded (repeatable)",
+)
+@click.option(
+    "--exclude-dir",
+    "exclude_dir_patterns",
+    multiple=True,
+    help="Glob pattern(s) to mark directories as excluded (repeatable)",
 )
 @click.option(
     "--no-number",
@@ -765,6 +774,7 @@ def main(
     force: bool,
     include_patterns: tuple[str, ...],
     exclude_patterns: tuple[str, ...],
+    exclude_dir_patterns: tuple[str, ...],
     no_line_numbers: bool,
     tree_only: bool,
     tokens: bool,
@@ -779,6 +789,7 @@ def main(
         force (bool): If True, ignore .gitignore and Git-tracked files.
         include_patterns (Tuple[str, ...]): The tuple of include glob patterns.
         exclude_patterns (Tuple[str, ...]): The tuple of exclude glob patterns.
+        exclude_dir_patterns (Tuple[str, ...]): The tuple of exclude-dir glob patterns.
         no_line_numbers (bool): If True, disable line numbers.
         tree_only (bool): If True, output only the folder structure tree.
         tokens (bool): If True, display token counts for each file in the tree.
@@ -789,13 +800,29 @@ def main(
     print(f"Starting script for directory: {root_path}", file=sys.stderr)
     gitignore_specs, tracked_files = get_ignore_settings(root_path, force)
 
+    # Build filter engine from CLI rules
+    # NOTE: Click doesn't preserve the order of different option types.
+    # We process in a fixed order: excludes, exclude-dirs, then includes.
+    # This allows patterns like --exclude '**' --include '*.py' to work correctly
+    # (exclude all, then include specific files).
+    rules: list[Rule] = []
+
+    for pattern in exclude_patterns:
+        rules.append(Rule(kind=RuleKind.EXCLUDE, pattern=pattern))
+    for pattern in exclude_dir_patterns:
+        rules.append(Rule(kind=RuleKind.EXCLUDE_DIR, pattern=pattern))
+    for pattern in include_patterns:
+        rules.append(Rule(kind=RuleKind.INCLUDE, pattern=pattern))
+
+    # Always create a FilterEngine, even with empty rules (defaults to include all)
+    filter_engine = FilterEngine(rules)
+
     # Always collect file infos
     file_infos = collect_file_info(
         root_path,
         gitignore_specs,
         tracked_files,
-        include_patterns=list(include_patterns),
-        exclude_patterns=list(exclude_patterns),
+        filter_engine=filter_engine,
     )
 
     if tokens:
@@ -804,7 +831,7 @@ def main(
             root_path,
             file_infos,
             with_tokens=True,
-            exclude_patterns=list(exclude_patterns),
+            filter_engine=filter_engine,
             top_n=top_n,
         )
         # When showing tokens, we don't need the file contents
@@ -816,7 +843,7 @@ def main(
             root_path,
             file_infos,
             with_tokens=False,
-            exclude_patterns=list(exclude_patterns),
+            filter_engine=filter_engine,
         )
 
         if tree_only:
@@ -830,8 +857,7 @@ def main(
                 gitignore_specs,
                 output_file,
                 tracked_files,
-                include_patterns=list(include_patterns),
-                exclude_patterns=list(exclude_patterns),
+                filter_engine=filter_engine,
                 line_numbers=not no_line_numbers,
             )
 
