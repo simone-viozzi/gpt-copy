@@ -7,6 +7,7 @@ from pathlib import Path
 import pytest
 
 from gpt_copy.gpt_copy import generate_tree, collect_file_info
+from gpt_copy.filter import FilterEngine, Rule, RuleKind
 
 
 @pytest.mark.parametrize(
@@ -16,10 +17,11 @@ from gpt_copy.gpt_copy import generate_tree, collect_file_info
         ("exclude", ["dropbox/file.txt"], ["dropbox", "other.txt"], ["file.txt"]),
         ("exclude", ["dropbox/*"], ["dropbox", "other.txt"], ["file.txt"]),
         ("exclude", ["dropbox"], ["other.txt"], []),  # dropbox shown compressed
-        # Inclusion patterns
-        ("include", ["*.txt"], ["other.txt"], ["dropbox"]),  # only txt files included
-        ("include", ["dropbox/*"], ["dropbox", "file.txt"], ["other.txt"]),
-        ("include", ["other.txt"], ["other.txt"], ["dropbox", "file.txt"]),
+        # Inclusion patterns - NEW BEHAVIOR: default is INCLUDE
+        # To get "only txt files", must first exclude all, then include specific
+        ("include", ["*.txt"], ["other.txt", "dropbox", "file.txt"], []),  # include matches *.txt (both files)
+        ("include", ["dropbox/*"], ["dropbox", "file.txt", "other.txt"], []),  # include matches dropbox/* (file.txt)
+        ("include", ["other.txt"], ["other.txt", "dropbox", "file.txt"], []),  # include matches other.txt
     ],
 )
 def test_pattern_filtering(pattern_type, patterns, expected_in, expected_out):
@@ -33,17 +35,22 @@ def test_pattern_filtering(pattern_type, patterns, expected_in, expected_out):
         (dropbox_dir / "file.txt").write_text("content")
         (temp_path / "other.txt").write_text("other")
 
-        # Apply patterns based on type
+        # Create filter engine based on pattern type
+        rules = []
         if pattern_type == "exclude":
-            file_infos = collect_file_info(temp_path, {}, None, None, patterns)
-            result = generate_tree(
-                temp_path, file_infos, with_tokens=False, exclude_patterns=patterns
-            )
+            for pattern in patterns:
+                rules.append(Rule(kind=RuleKind.EXCLUDE, pattern=pattern))
         else:  # include
-            file_infos = collect_file_info(temp_path, {}, None, patterns, None)
-            result = generate_tree(
-                temp_path, file_infos, with_tokens=False, exclude_patterns=None
-            )
+            for pattern in patterns:
+                rules.append(Rule(kind=RuleKind.INCLUDE, pattern=pattern))
+        
+        filter_engine = FilterEngine(rules) if rules else None
+
+        # Collect file infos and generate tree
+        file_infos = collect_file_info(temp_path, {}, None, filter_engine)
+        result = generate_tree(
+            temp_path, file_infos, with_tokens=False, filter_engine=filter_engine
+        )
 
         # Check expected inclusions
         for item in expected_in:

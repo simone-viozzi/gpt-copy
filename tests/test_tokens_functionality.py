@@ -47,13 +47,12 @@ class TestTokensCounting:
             # Get ignore settings
             gitignore_specs, tracked_files = get_ignore_settings(temp_path, force=True)
 
-            # Collect file info
+            # Collect file info (no filter engine = include all)
             file_infos = collect_file_info(
                 temp_path,
                 gitignore_specs,
                 tracked_files,
-                include_patterns=None,
-                exclude_patterns=None,
+                filter_engine=None,
             )
 
             # Check results
@@ -86,8 +85,7 @@ class TestTokensCounting:
                 temp_path,
                 gitignore_specs,
                 tracked_files,
-                include_patterns=None,
-                exclude_patterns=None,
+                filter_engine=None,
             )
 
             # Generate tree with tokens
@@ -123,8 +121,7 @@ class TestTokensCounting:
                 temp_path,
                 gitignore_specs,
                 tracked_files,
-                include_patterns=None,
-                exclude_patterns=None,
+                filter_engine=None,
             )
 
             # Generate tree with top-3
@@ -163,13 +160,20 @@ class TestTokensCounting:
             # Get ignore settings
             gitignore_specs, tracked_files = get_ignore_settings(temp_path, force=True)
 
+            # Create filter engine for Python files only
+            from gpt_copy.filter import FilterEngine, Rule, RuleKind
+            rules = [
+                Rule(kind=RuleKind.EXCLUDE, pattern="**"),
+                Rule(kind=RuleKind.INCLUDE, pattern="*.py"),
+            ]
+            filter_engine = FilterEngine(rules)
+
             # Collect only Python files
             file_infos = collect_file_info(
                 temp_path,
                 gitignore_specs,
                 tracked_files,
-                include_patterns=["*.py"],
-                exclude_patterns=None,
+                filter_engine=filter_engine,
             )
 
             # Should only have the Python file
