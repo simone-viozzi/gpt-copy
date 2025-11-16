@@ -363,16 +363,16 @@ def collect_file_info(
     root_path: Path,
     gitignore_specs: dict[str, PathSpec],
     tracked_files: set[str] | None,
-    filter_engine: FilterEngine | None = None,
+    filter_engine: FilterEngine,
 ) -> list[FileInfo]:
     """
-    Collect file and directory information using the new rule-based filtering.
+    Collect file and directory information using rule-based filtering.
 
     Args:
         root_path (Path): The root path to start collecting.
         gitignore_specs (Dict[str, PathSpec]): The gitignore specifications.
         tracked_files (Optional[Set[str]]): The set of tracked files.
-        filter_engine (Optional[FilterEngine]): The filter engine for CLI rules.
+        filter_engine (FilterEngine): The filter engine for CLI rules.
 
     Returns:
         List[FileInfo]: List of FileInfo objects for files and directories.
@@ -396,69 +396,51 @@ def collect_file_info(
             is_dir = entry.is_dir()
 
             # Stage 2: Apply CLI filter rules
-            if filter_engine:
-                action = filter_engine.effective_action(rel_path, is_dir)
+            action = filter_engine.effective_action(rel_path, is_dir)
 
-                if is_dir:
-                    if action == Action.EXCLUDE:
-                        # Check if we should traverse anyway for late includes
-                        if filter_engine.may_have_late_include_descendant(rel_path):
-                            # Don't add the directory itself, but traverse it
-                            collect_recursive(entry)
-                            continue
-                        else:
-                            # Safe to prune - add compressed view
-                            file_infos.append(
-                                FileInfo(
-                                    path=entry,
-                                    relative_path=rel_path,
-                                    is_directory=True,
-                                )
-                            )
-                            # Collect direct children for compression
-                            try:
-                                children = sorted(entry.iterdir())
-                                for child in children:
-                                    if not is_ignored(
-                                        child, gitignore_specs, root_path, tracked_files
-                                    ):
-                                        child_rel = child.relative_to(
-                                            root_path
-                                        ).as_posix()
-                                        file_infos.append(
-                                            FileInfo(
-                                                path=child,
-                                                relative_path=child_rel,
-                                                is_directory=child.is_dir(),
-                                            )
-                                        )
-                            except OSError:
-                                pass
-                            continue
-                    else:
-                        # INCLUDE: add directory and recurse
-                        file_infos.append(
-                            FileInfo(
-                                path=entry, relative_path=rel_path, is_directory=True
-                            )
-                        )
+            if is_dir:
+                if action == Action.EXCLUDE:
+                    # Check if we should traverse anyway for late includes
+                    if filter_engine.may_have_late_include_descendant(rel_path):
+                        # Don't add the directory itself, but traverse it
                         collect_recursive(entry)
-                else:
-                    # File: include if action is INCLUDE
-                    if action == Action.INCLUDE:
+                        continue
+                    else:
+                        # Safe to prune - add compressed view
                         file_infos.append(
                             FileInfo(
-                                path=entry, relative_path=rel_path, is_directory=False
+                                path=entry,
+                                relative_path=rel_path,
+                                is_directory=True,
                             )
                         )
-            else:
-                # No filter engine - include everything (after VCS filtering)
-                if is_dir:
+                        # Collect direct children for compression
+                        try:
+                            children = sorted(entry.iterdir())
+                            for child in children:
+                                if not is_ignored(
+                                    child, gitignore_specs, root_path, tracked_files
+                                ):
+                                    child_rel = child.relative_to(root_path).as_posix()
+                                    file_infos.append(
+                                        FileInfo(
+                                            path=child,
+                                            relative_path=child_rel,
+                                            is_directory=child.is_dir(),
+                                        )
+                                    )
+                        except OSError:
+                            pass
+                        continue
+                else:
+                    # INCLUDE: add directory and recurse
                     file_infos.append(
                         FileInfo(path=entry, relative_path=rel_path, is_directory=True)
                     )
                     collect_recursive(entry)
-                else:
+            else:
+                # File: include if action is INCLUDE
+                if action == Action.INCLUDE:
                     file_infos.append(
                         FileInfo(path=entry, relative_path=rel_path, is_directory=False)
                     )
@@ -627,7 +609,7 @@ def collect_files_content(
     gitignore_specs: dict[str, PathSpec],
     output_file: str | None,
     tracked_files: set[str] | None,
-    filter_engine: FilterEngine | None = None,
+    filter_engine: FilterEngine,
     line_numbers: bool = False,
 ) -> tuple[list[str], list[str]]:
     """
@@ -639,7 +621,7 @@ def collect_files_content(
         gitignore_specs (Dict[str, PathSpec]): The gitignore specifications.
         output_file (Optional[str]): The output file path.
         tracked_files (Optional[Set[str]]): The set of tracked files.
-        filter_engine (Optional[FilterEngine]): The filter engine for CLI rules.
+        filter_engine (FilterEngine): The filter engine for CLI rules.
         line_numbers (bool): If True, adds line numbers to file contents.
 
     Returns:
@@ -664,10 +646,9 @@ def collect_files_content(
             rel_path = full_file_path.relative_to(root_path).as_posix()
 
             # Stage 2: Apply filter engine
-            if filter_engine:
-                action = filter_engine.effective_action(rel_path, is_dir=False)
-                if action == Action.EXCLUDE:
-                    continue
+            action = filter_engine.effective_action(rel_path, is_dir=False)
+            if action == Action.EXCLUDE:
+                continue
 
             if is_binary_file(full_file_path):
                 unrecognized_files.append(rel_path)
@@ -826,7 +807,6 @@ def main(
     # We process in a fixed order: excludes, exclude-dirs, then includes.
     # This allows patterns like --exclude '**' --include '*.py' to work correctly
     # (exclude all, then include specific files).
-    filter_engine = None
     rules: list[Rule] = []
 
     for pattern in exclude_patterns:
@@ -836,8 +816,8 @@ def main(
     for pattern in include_patterns:
         rules.append(Rule(kind=RuleKind.INCLUDE, pattern=pattern))
 
-    if rules:
-        filter_engine = FilterEngine(rules)
+    # Always create a FilterEngine, even with empty rules (defaults to include all)
+    filter_engine = FilterEngine(rules)
 
     # Always collect file infos
     file_infos = collect_file_info(

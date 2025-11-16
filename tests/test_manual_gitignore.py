@@ -14,6 +14,7 @@ from gpt_copy.gpt_copy import (
     main,
     is_ignored,
 )
+from gpt_copy.filter import FilterEngine
 
 
 @pytest.fixture
@@ -62,7 +63,11 @@ def test_infer_language():
 def test_generate_tree(temp_directory: Path):
     """Ensure directory tree generation works correctly using .gitignore rules."""
     gitignore_specs = collect_gitignore_specs(temp_directory)
-    file_infos = collect_file_info(temp_directory, gitignore_specs, tracked_files=None)
+    # Create empty filter engine (no CLI rules, so everything is included)
+    filter_engine = FilterEngine([])
+    file_infos = collect_file_info(
+        temp_directory, gitignore_specs, tracked_files=None, filter_engine=filter_engine
+    )
     tree = generate_tree(temp_directory, file_infos, with_tokens=False)
 
     assert "file.py" in tree
@@ -100,8 +105,10 @@ def test_is_ignored(temp_directory: Path):
 def test_collect_files_content(temp_directory: Path):
     """Ensure files are correctly collected and recognized."""
     gitignore_specs = collect_gitignore_specs(temp_directory)
+    # Create empty filter engine
+    filter_engine = FilterEngine([])
     files, unrecognized = collect_files_content(
-        temp_directory, gitignore_specs, None, None
+        temp_directory, gitignore_specs, None, None, filter_engine
     )
 
     assert len(files) > 0

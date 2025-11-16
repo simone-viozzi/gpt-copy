@@ -11,6 +11,7 @@ from gpt_copy.gpt_copy import (
     collect_files_content,
     collect_file_info,
 )
+from gpt_copy.filter import FilterEngine
 from collections.abc import Generator
 
 
@@ -97,7 +98,8 @@ def test_generate_tree_git(git_repo: Path):
     repo = pygit2.Repository(git_repo.as_posix())
     tracked_files = get_tracked_files(repo)
 
-    file_infos = collect_file_info(git_repo, {}, tracked_files)
+    filter_engine = FilterEngine([])
+    file_infos = collect_file_info(git_repo, {}, tracked_files, filter_engine)
     tree = generate_tree(git_repo, file_infos, with_tokens=False)
 
     assert "file.py" in tree
@@ -116,7 +118,10 @@ def test_collect_files_content_git(git_repo: Path):
     repo = pygit2.Repository(git_repo.as_posix())
     tracked_files = get_tracked_files(repo)
 
-    files, unrecognized = collect_files_content(git_repo, {}, None, tracked_files)
+    filter_engine = FilterEngine([])
+    files, unrecognized = collect_files_content(
+        git_repo, {}, None, tracked_files, filter_engine
+    )
 
     assert len(files) > 0
     assert any("file.py" in f for f in files)

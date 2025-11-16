@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-Comprehensive tests for the new filtering specification.
+Comprehensive tests for the filtering specification.
 
-Tests all examples from the issue specification to ensure the new
+Tests all examples from the issue specification to ensure the
 last-match-wins semantics work correctly with conservative directory traversal.
 """
 

@@ -17,7 +17,7 @@ from gpt_copy.filter import FilterEngine, Rule, RuleKind
         ("exclude", ["dropbox/file.txt"], ["dropbox", "other.txt"], ["file.txt"]),
         ("exclude", ["dropbox/*"], ["dropbox", "other.txt"], ["file.txt"]),
         ("exclude", ["dropbox"], ["other.txt"], []),  # dropbox shown compressed
-        # Inclusion patterns - NEW BEHAVIOR: default is INCLUDE
+        # Inclusion patterns - default is INCLUDE
         # To get "only txt files", must first exclude all, then include specific
         (
             "include",
