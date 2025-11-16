@@ -162,6 +162,7 @@ class TestTokensCounting:
 
             # Create filter engine for Python files only
             from gpt_copy.filter import FilterEngine, Rule, RuleKind
+
             rules = [
                 Rule(kind=RuleKind.EXCLUDE, pattern="**"),
                 Rule(kind=RuleKind.INCLUDE, pattern="*.py"),

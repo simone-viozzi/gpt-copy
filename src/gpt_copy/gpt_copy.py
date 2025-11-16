@@ -13,8 +13,6 @@ from pathspec.patterns.gitwildmatch import GitWildMatchPattern
 from tqdm import tqdm
 
 from gpt_copy.filter import (
-    should_include_file,
-    matches_any_pattern,
     FilterEngine,
     Rule,
     RuleKind,
@@ -400,7 +398,7 @@ def collect_file_info(
             # Stage 2: Apply CLI filter rules
             if filter_engine:
                 action = filter_engine.effective_action(rel_path, is_dir)
-                
+
                 if is_dir:
                     if action == Action.EXCLUDE:
                         # Check if we should traverse anyway for late includes
@@ -411,7 +409,11 @@ def collect_file_info(
                         else:
                             # Safe to prune - add compressed view
                             file_infos.append(
-                                FileInfo(path=entry, relative_path=rel_path, is_directory=True)
+                                FileInfo(
+                                    path=entry,
+                                    relative_path=rel_path,
+                                    is_directory=True,
+                                )
                             )
                             # Collect direct children for compression
                             try:
@@ -420,7 +422,9 @@ def collect_file_info(
                                     if not is_ignored(
                                         child, gitignore_specs, root_path, tracked_files
                                     ):
-                                        child_rel = child.relative_to(root_path).as_posix()
+                                        child_rel = child.relative_to(
+                                            root_path
+                                        ).as_posix()
                                         file_infos.append(
                                             FileInfo(
                                                 path=child,
@@ -434,14 +438,18 @@ def collect_file_info(
                     else:
                         # INCLUDE: add directory and recurse
                         file_infos.append(
-                            FileInfo(path=entry, relative_path=rel_path, is_directory=True)
+                            FileInfo(
+                                path=entry, relative_path=rel_path, is_directory=True
+                            )
                         )
                         collect_recursive(entry)
                 else:
                     # File: include if action is INCLUDE
                     if action == Action.INCLUDE:
                         file_infos.append(
-                            FileInfo(path=entry, relative_path=rel_path, is_directory=False)
+                            FileInfo(
+                                path=entry, relative_path=rel_path, is_directory=False
+                            )
                         )
             else:
                 # No filter engine - include everything (after VCS filtering)
@@ -820,14 +828,14 @@ def main(
     # (exclude all, then include specific files).
     filter_engine = None
     rules: list[Rule] = []
-    
+
     for pattern in exclude_patterns:
         rules.append(Rule(kind=RuleKind.EXCLUDE, pattern=pattern))
     for pattern in exclude_dir_patterns:
         rules.append(Rule(kind=RuleKind.EXCLUDE_DIR, pattern=pattern))
     for pattern in include_patterns:
         rules.append(Rule(kind=RuleKind.INCLUDE, pattern=pattern))
-    
+
     if rules:
         filter_engine = FilterEngine(rules)
 

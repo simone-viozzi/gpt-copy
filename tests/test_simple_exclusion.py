@@ -19,9 +19,24 @@ from gpt_copy.filter import FilterEngine, Rule, RuleKind
         ("exclude", ["dropbox"], ["other.txt"], []),  # dropbox shown compressed
         # Inclusion patterns - NEW BEHAVIOR: default is INCLUDE
         # To get "only txt files", must first exclude all, then include specific
-        ("include", ["*.txt"], ["other.txt", "dropbox", "file.txt"], []),  # include matches *.txt (both files)
-        ("include", ["dropbox/*"], ["dropbox", "file.txt", "other.txt"], []),  # include matches dropbox/* (file.txt)
-        ("include", ["other.txt"], ["other.txt", "dropbox", "file.txt"], []),  # include matches other.txt
+        (
+            "include",
+            ["*.txt"],
+            ["other.txt", "dropbox", "file.txt"],
+            [],
+        ),  # include matches *.txt (both files)
+        (
+            "include",
+            ["dropbox/*"],
+            ["dropbox", "file.txt", "other.txt"],
+            [],
+        ),  # include matches dropbox/* (file.txt)
+        (
+            "include",
+            ["other.txt"],
+            ["other.txt", "dropbox", "file.txt"],
+            [],
+        ),  # include matches other.txt
     ],
 )
 def test_pattern_filtering(pattern_type, patterns, expected_in, expected_out):
@@ -43,7 +58,7 @@ def test_pattern_filtering(pattern_type, patterns, expected_in, expected_out):
         else:  # include
             for pattern in patterns:
                 rules.append(Rule(kind=RuleKind.INCLUDE, pattern=pattern))
-        
+
         filter_engine = FilterEngine(rules) if rules else None
 
         # Collect file infos and generate tree

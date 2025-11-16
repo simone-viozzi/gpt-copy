@@ -28,7 +28,7 @@ def test_generate_tree_excluded(tmp_path: Path):
     # For testing purposes, assume no gitignored files.
     gitignore_specs = {}
     tracked_files = None
-    
+
     # Create filter engine with exclude pattern for exclude_dir
     rules = [Rule(kind=RuleKind.EXCLUDE, pattern="exclude_dir")]
     filter_engine = FilterEngine(rules)
