@@ -734,20 +734,20 @@ def write_output(
     "--include",
     "include_patterns",
     multiple=True,
-    help="Glob pattern(s) to mark files/directories as included (repeatable)",
+    help="Glob pattern(s) to include files/directories (e.g., 'src/**/*.py'). Last match wins. Repeatable.",
 )
 @click.option(
     "-e",
     "--exclude",
     "exclude_patterns",
     multiple=True,
-    help="Glob pattern(s) to mark files/directories as excluded (repeatable)",
+    help="Glob pattern(s) to exclude files/directories (e.g., 'tests/', '**/*.log'). Patterns ending with / exclude the directory and all contents. Repeatable.",
 )
 @click.option(
     "--exclude-dir",
     "exclude_dir_patterns",
     multiple=True,
-    help="Glob pattern(s) to mark directories as excluded (repeatable)",
+    help="Exclude directories by name/pattern (e.g., 'node_modules', 'dist'). Automatically adds trailing /. Repeatable.",
 )
 @click.option(
     "--no-number",
