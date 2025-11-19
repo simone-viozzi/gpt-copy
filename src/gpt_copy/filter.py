@@ -74,21 +74,33 @@ class FilterEngine:
         Returns:
             True if the pattern matches the path
         """
-        # If pattern ends with /, only match directories
-        if pattern.endswith("/"):
-            if not is_dir:
-                return False
-            # Match the pattern against the path with trailing /
-            match_path = relpath + "/"
-        else:
-            # For files, match as-is. For dirs, try both with and without /
-            match_path = relpath
-
         # Use PathSpec for glob matching with ** support
         spec = self._compiled_specs.get(pattern)
-        if spec:
-            return spec.match_file(match_path)
-        return False
+        if not spec:
+            return False
+
+        # If pattern ends with /, it should only match directories
+        # For patterns like "dir/", match the directory and contents
+        # For patterns like "dir/**/", match only directories at any depth under dir/
+        if pattern.endswith("/"):
+            if not is_dir:
+                # Files should not match directory-only patterns
+                # UNLESS the pattern also matches the file path (e.g., "dir/" matches "dir/file.txt")
+                # Check if this is a simple directory pattern or has wildcards
+                if "**" in pattern or "*" in pattern.rstrip("/"):
+                    # Pattern has wildcards - only match if this is a directory
+                    return False
+                # Pattern is a simple directory like "node_modules/"
+                # This should match contents too
+                match_path = relpath
+            else:
+                # Match the directory with trailing /
+                match_path = relpath + "/"
+        else:
+            # For non-directory patterns, match as-is
+            match_path = relpath
+
+        return spec.match_file(match_path)
 
     def effective_action(self, relpath: str, is_dir: bool) -> Action:
         """
@@ -154,18 +166,47 @@ class FilterEngine:
         Returns:
             True if the pattern could potentially match a descendant
         """
-        # If pattern contains **, it might match deep descendants
-        if "**" in pattern:
-            return True
-
         # If pattern starts with the directory path, it targets descendants
         if pattern.startswith(dir_relpath + "/"):
             return True
 
-        # If the pattern has no directory component and dir is not nested,
-        # it could match direct children
+        # If dir is root level, any pattern could potentially match something under it
+        if not dir_relpath or dir_relpath == ".":
+            return True
+
+        # If pattern contains ** at the start (like **/foo), it might match anywhere
+        if pattern.startswith("**/"):
+            return True
+
+        # If pattern is just **, it matches everything
+        if pattern == "**":
+            return True
+
+        # If the pattern has no directory component, it could match direct children
         if "/" not in pattern.rstrip("/"):
             return True
+
+        # For patterns with directory components (like "build/reports/**"),
+        # check if the pattern could possibly match under dir_relpath
+        # Extract the first directory component of the pattern
+        pattern_first_dir = pattern.split("/")[0]
+        
+        # Check if dir_relpath could contain this directory
+        # For example:
+        #   dir_relpath="node_modules", pattern="build/reports/**" -> False (different first dirs)
+        #   dir_relpath="build", pattern="build/reports/**" -> True (pattern is under build)
+        #   dir_relpath="", pattern="build/reports/**" -> True (pattern could be anywhere)
+        
+        # If the directory path starts with the pattern's first directory, it could match
+        if dir_relpath.startswith(pattern_first_dir + "/") or dir_relpath == pattern_first_dir:
+            return True
+        
+        # If the pattern's first directory starts with dir_relpath, it could match
+        if pattern_first_dir.startswith(dir_relpath + "/"):
+            return True
+        
+        # Otherwise, the paths are incompatible
+        return False
 
         # For other cases, be conservative - allow traversal
         # This includes patterns like "data/*.csv" which might match if dir_relpath is "" or "data"
