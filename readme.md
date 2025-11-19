@@ -54,33 +54,60 @@ gpt-copy /path/to/directory -o output.md
 ```
 
 ### Advanced File Filtering
-Fine-tune which files are processed using include and exclude options.
+Fine-tune which files are processed using include and exclude options. Patterns follow gitignore-style glob syntax with support for `*`, `**`, and brace expansion.
 
-- **Include Files (`-i` or `--include`):**
-  Specify one or more glob patterns (with optional brace expansion) to include only matching files.
+#### Filter Options
 
-  **Examples:**
-  - Include all Python files in the `src` folder:
-    ```sh
-    gpt-copy /path/to/directory -i "src/*.py"
-    ```
-  - Include specific modules:
-    ```sh
-    gpt-copy /path/to/directory -i "src/{module1,module2}.py"
-    ```
+- **`-i` or `--include`:** Include files/directories matching the pattern
+- **`-e` or `--exclude`:** Exclude files/directories matching the pattern
+- **`--exclude-dir`:** Exclude directories (automatically adds trailing `/`)
 
-- **Exclude Files (`-e` or `--exclude`):**
-  Specify one or more glob patterns to exclude files. Exclusion takes precedence over inclusion.
+#### Pattern Matching Rules
 
-  **Examples:**
-  - Exclude all files in the `tests` folder:
-    ```sh
-    gpt-copy /path/to/directory -e "tests/*"
-    ```
-  - Exclude a specific file:
-    ```sh
-    gpt-copy /path/to/directory -i "src/*.py" -e "src/__init__.py"
-    ```
+1. **Last Match Wins:** If multiple patterns match a file, the last matching pattern determines whether it's included or excluded.
+2. **Directory Patterns:** Patterns ending with `/` match directories and all their contents.
+   - `node_modules/` excludes the directory and everything inside it
+   - `build/` excludes the build directory and all files/subdirectories
+3. **Wildcard Patterns:**
+   - `*` matches any characters except `/`
+   - `**` matches any characters including `/` (any depth)
+   - `tests/*` matches direct children of tests directory
+   - `**/*.log` matches all .log files at any depth
+4. **Directory-Only Wildcards:** Patterns with wildcards ending in `/` match only directories
+   - `tmp/**/` matches all directories under tmp/ at any depth, but not files
+
+#### Examples
+
+- **Exclude directories with all their contents:**
+  ```sh
+  gpt-copy . --exclude-dir tests --exclude-dir node_modules
+  # or equivalently:
+  gpt-copy . -e "tests/" -e "node_modules/"
+  ```
+
+- **Exclude specific directories but include subdirectories:**
+  ```sh
+  gpt-copy . -e "tests/*" -i "tests/**/"
+  # Excludes direct children of tests/ but includes nested directories
+  ```
+
+- **Exclude all files then include specific ones:**
+  ```sh
+  gpt-copy . -e "**" -i "src/**/*.py"
+  # Excludes everything, then includes Python files under src/
+  ```
+
+- **Complex filtering with multiple patterns:**
+  ```sh
+  gpt-copy . -e "build/**" -e "**/*.log" -i "build/reports/**"
+  # Excludes build directory and all .log files, but includes build/reports/
+  ```
+
+- **Include only specific folder:**
+  ```sh
+  gpt-copy . -e "app/" -e "tests/" -e "notebooks/" -i "deployment/"
+  # Excludes app, tests, notebooks, includes only deployment
+  ```
 
 ### Force Mode (`-f` or `--force`)
 Ignore `.gitignore` and Git-tracked file restrictions to process **all** files:

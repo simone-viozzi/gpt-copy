@@ -415,6 +415,7 @@ def collect_file_info(
                             )
                         )
                         # Collect direct children for compression
+                        # Only add children that aren't excluded by filter rules
                         try:
                             children = sorted(entry.iterdir())
                             for child in children:
@@ -422,13 +423,18 @@ def collect_file_info(
                                     child, gitignore_specs, root_path, tracked_files
                                 ):
                                     child_rel = child.relative_to(root_path).as_posix()
-                                    file_infos.append(
-                                        FileInfo(
-                                            path=child,
-                                            relative_path=child_rel,
-                                            is_directory=child.is_dir(),
-                                        )
+                                    # Check if child is excluded by filter rules
+                                    child_action = filter_engine.effective_action(
+                                        child_rel, child.is_dir()
                                     )
+                                    if child_action == Action.INCLUDE:
+                                        file_infos.append(
+                                            FileInfo(
+                                                path=child,
+                                                relative_path=child_rel,
+                                                is_directory=child.is_dir(),
+                                            )
+                                        )
                         except OSError:
                             pass
                         continue
@@ -728,20 +734,20 @@ def write_output(
     "--include",
     "include_patterns",
     multiple=True,
-    help="Glob pattern(s) to mark files/directories as included (repeatable)",
+    help="Glob pattern(s) to include files/directories (e.g., 'src/**/*.py'). Last match wins. Repeatable.",
 )
 @click.option(
     "-e",
     "--exclude",
     "exclude_patterns",
     multiple=True,
-    help="Glob pattern(s) to mark files/directories as excluded (repeatable)",
+    help="Glob pattern(s) to exclude files/directories (e.g., 'tests/', '**/*.log'). Patterns ending with / exclude the directory and all contents. Repeatable.",
 )
 @click.option(
     "--exclude-dir",
     "exclude_dir_patterns",
     multiple=True,
-    help="Glob pattern(s) to mark directories as excluded (repeatable)",
+    help="Exclude directories by name/pattern (e.g., 'node_modules', 'dist'). Automatically adds trailing /. Repeatable.",
 )
 @click.option(
     "--no-number",
