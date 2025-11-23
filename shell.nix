@@ -6,7 +6,7 @@ let
   pythonPackages = pkgs.python311Packages; # Change to Python 3.10
 in
 pkgs.mkShell rec {
-  name = "concatenate-files";
+  name = "gpt-copy";
 
   buildInputs = with pkgs; [
     gcc # Required for crates needing C compilers

@@ -46,15 +46,12 @@ def test_generate_tree_excluded(tmp_path: Path):
     # Debug print (optional)
     print(tree_output)
 
-    # Verify that the excluded directory is shown in compressed form.
+    # Verify that the excluded directory is shown (without children, as they're excluded).
     assert "exclude_dir" in tree_output
-    # The compressed view should show at most 3 children of the excluded directory.
-    assert "file3.txt" in tree_output
-    assert "file4.txt" in tree_output
-    assert "file5.txt" in tree_output
-    # There should be an ellipsis indicating additional files.
-    assert "[...]" in tree_output
-    # Ensure that the fourth child (file6.txt) is not shown.
+    # Children of excluded directories should not be shown (they're filtered out).
+    assert "file3.txt" not in tree_output
+    assert "file4.txt" not in tree_output
+    assert "file5.txt" not in tree_output
     assert "file6.txt" not in tree_output
 
     # Also verify that the included directory is fully expanded.
