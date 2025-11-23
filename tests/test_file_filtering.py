@@ -59,3 +59,43 @@ def test_filter_engine_exclude_then_include():
     assert engine.effective_action("docs/readme.md", is_dir=False) == Action.INCLUDE
     # docs/other.md matches only first rule -> EXCLUDE
     assert engine.effective_action("docs/other.md", is_dir=False) == Action.EXCLUDE
+
+
+def test_filter_engine_tracks_unmatched_patterns():
+    """Test that FilterEngine correctly tracks unmatched patterns."""
+    rules = [
+        Rule(kind=RuleKind.EXCLUDE, pattern="*.log"),
+        Rule(kind=RuleKind.INCLUDE, pattern="*.txt"),
+        Rule(kind=RuleKind.EXCLUDE, pattern="*.nonexistent"),
+    ]
+    engine = FilterEngine(rules)
+
+    # Simulate matching some files
+    engine.matches("*.log", "debug.log", is_dir=False)
+    engine.matches("*.txt", "readme.txt", is_dir=False)
+
+    # Get unmatched patterns
+    unmatched = engine.get_unmatched_patterns()
+
+    # Only *.nonexistent should be unmatched
+    assert len(unmatched) == 1
+    assert unmatched[0] == (RuleKind.EXCLUDE, "*.nonexistent")
+
+
+def test_filter_engine_all_patterns_matched():
+    """Test that no warning when all patterns match."""
+    rules = [
+        Rule(kind=RuleKind.EXCLUDE, pattern="*.log"),
+        Rule(kind=RuleKind.INCLUDE, pattern="*.txt"),
+    ]
+    engine = FilterEngine(rules)
+
+    # Simulate matching all patterns
+    engine.matches("*.log", "debug.log", is_dir=False)
+    engine.matches("*.txt", "readme.txt", is_dir=False)
+
+    # Get unmatched patterns
+    unmatched = engine.get_unmatched_patterns()
+
+    # No patterns should be unmatched
+    assert len(unmatched) == 0

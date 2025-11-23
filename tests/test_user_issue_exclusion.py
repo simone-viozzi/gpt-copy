@@ -210,5 +210,61 @@ def test_exclude_all_then_include_specific():
         assert "uv.lock" not in file_paths
 
 
+def test_cli_warns_about_unmatched_patterns():
+    """Test that CLI warns about patterns that don't match any files."""
+    from click.testing import CliRunner
+    from gpt_copy.gpt_copy import main as gpt_copy_main
+
+    with tempfile.TemporaryDirectory() as temp_dir:
+        temp_path = Path(temp_dir)
+
+        # Create test files
+        (temp_path / "file.txt").write_text("content")
+        (temp_path / "readme.md").write_text("readme")
+
+        runner = CliRunner()
+        result = runner.invoke(
+            gpt_copy_main,
+            [str(temp_path), "--exclude", "*.nonexistent", "--tree-only"],
+        )
+
+        # Check that command succeeded
+        assert result.exit_code == 0
+
+        # Check that warning is in output
+        assert (
+            "Warning: The following patterns did not match any files:" in result.output
+        )
+        assert "--exclude '*.nonexistent'" in result.output
+
+
+def test_cli_no_warning_when_patterns_match():
+    """Test that CLI doesn't warn when all patterns match files."""
+    from click.testing import CliRunner
+    from gpt_copy.gpt_copy import main as gpt_copy_main
+
+    with tempfile.TemporaryDirectory() as temp_dir:
+        temp_path = Path(temp_dir)
+
+        # Create test files
+        (temp_path / "file.txt").write_text("content")
+        (temp_path / "readme.md").write_text("readme")
+
+        runner = CliRunner()
+        result = runner.invoke(
+            gpt_copy_main,
+            [str(temp_path), "--exclude", "*.md", "--tree-only"],
+        )
+
+        # Check that command succeeded
+        assert result.exit_code == 0
+
+        # Check that no warning is in output
+        assert (
+            "Warning: The following patterns did not match any files:"
+            not in result.output
+        )
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

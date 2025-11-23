@@ -390,5 +390,41 @@ def test_conservative_traversal():
         )
 
 
+def test_cli_warns_about_multiple_unmatched_patterns():
+    """Test that CLI warns about multiple unmatched patterns in complex scenarios."""
+    from click.testing import CliRunner
+    from gpt_copy.gpt_copy import main as gpt_copy_main
+
+    with tempfile.TemporaryDirectory() as temp_dir:
+        temp_path = Path(temp_dir)
+        create_test_structure(temp_path)
+
+        runner = CliRunner()
+        result = runner.invoke(
+            gpt_copy_main,
+            [
+                str(temp_path),
+                "--exclude",
+                "*.xyz",
+                "--include",
+                "*.rb",
+                "--exclude-dir",
+                "fake_dir",
+                "--tree-only",
+            ],
+        )
+
+        # Check that command succeeded
+        assert result.exit_code == 0
+
+        # Check that warnings are shown for unmatched patterns
+        assert (
+            "Warning: The following patterns did not match any files:" in result.output
+        )
+        assert "--exclude '*.xyz'" in result.output
+        assert "--include '*.rb'" in result.output
+        assert "--exclude 'fake_dir/'" in result.output
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
