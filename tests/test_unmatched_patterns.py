@@ -133,7 +133,8 @@ def test_cli_warns_about_multiple_unmatched_patterns():
         )
         assert "--exclude '*.nonexistent'" in result.output
         assert "--include '*.doesntexist'" in result.output
-        # *.log shouldn't appear because there are no .log files to match
+        # Note: *.log will also be unmatched since no .log files exist,
+        # but we're not explicitly checking for it in this test
 
 
 def test_cli_no_warning_when_all_patterns_match():

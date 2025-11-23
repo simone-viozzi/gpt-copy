@@ -219,10 +219,6 @@ class FilterEngine:
         # Otherwise, the paths are incompatible
         return False
 
-        # For other cases, be conservative - allow traversal
-        # This includes patterns like "data/*.csv" which might match if dir_relpath is "" or "data"
-        return True
-
     def get_unmatched_patterns(self) -> list[tuple[RuleKind, str]]:
         """
         Get a list of patterns that never matched any file or directory.
