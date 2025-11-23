@@ -882,3 +882,14 @@ def main(
             "Some files were not recognized and were skipped. See 'Unrecognized Files' section.",
             file=sys.stderr,
         )
+
+    # Check for unmatched patterns and warn the user
+    unmatched = filter_engine.get_unmatched_patterns()
+    if unmatched:
+        print(
+            "\nWarning: The following patterns did not match any files:",
+            file=sys.stderr,
+        )
+        for kind, pattern in unmatched:
+            rule_type = "include" if kind == RuleKind.INCLUDE else "exclude"
+            print(f"  --{rule_type} '{pattern}'", file=sys.stderr)

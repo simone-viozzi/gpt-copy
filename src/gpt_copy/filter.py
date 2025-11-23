@@ -54,6 +54,8 @@ class FilterEngine:
         self.rules = rules
         # Pre-compile patterns for performance, expanding brace expressions
         self._compiled_specs: dict[str, PathSpec] = {}
+        # Track which patterns have matched at least once
+        self._pattern_matched: dict[str, bool] = {}
         for rule in rules:
             if rule.pattern not in self._compiled_specs:
                 # Expand brace expressions like {file1,file2} before compiling
@@ -61,6 +63,8 @@ class FilterEngine:
                 self._compiled_specs[rule.pattern] = PathSpec.from_lines(
                     GitWildMatchPattern, expanded_patterns
                 )
+            # Initialize tracking for this pattern
+            self._pattern_matched[rule.pattern] = False
 
     def matches(self, pattern: str, relpath: str, is_dir: bool) -> bool:
         """
@@ -100,7 +104,11 @@ class FilterEngine:
             # For non-directory patterns, match as-is
             match_path = relpath
 
-        return spec.match_file(match_path)
+        matched = spec.match_file(match_path)
+        # Track if this pattern matched
+        if matched:
+            self._pattern_matched[pattern] = True
+        return matched
 
     def effective_action(self, relpath: str, is_dir: bool) -> Action:
         """
@@ -190,27 +198,43 @@ class FilterEngine:
         # check if the pattern could possibly match under dir_relpath
         # Extract the first directory component of the pattern
         pattern_first_dir = pattern.split("/")[0]
-        
+
         # Check if dir_relpath could contain this directory
         # For example:
         #   dir_relpath="node_modules", pattern="build/reports/**" -> False (different first dirs)
         #   dir_relpath="build", pattern="build/reports/**" -> True (pattern is under build)
         #   dir_relpath="", pattern="build/reports/**" -> True (pattern could be anywhere)
-        
+
         # If the directory path starts with the pattern's first directory, it could match
-        if dir_relpath.startswith(pattern_first_dir + "/") or dir_relpath == pattern_first_dir:
+        if (
+            dir_relpath.startswith(pattern_first_dir + "/")
+            or dir_relpath == pattern_first_dir
+        ):
             return True
-        
+
         # If the pattern's first directory starts with dir_relpath, it could match
         if pattern_first_dir.startswith(dir_relpath + "/"):
             return True
-        
+
         # Otherwise, the paths are incompatible
         return False
 
         # For other cases, be conservative - allow traversal
         # This includes patterns like "data/*.csv" which might match if dir_relpath is "" or "data"
         return True
+
+    def get_unmatched_patterns(self) -> list[tuple[RuleKind, str]]:
+        """
+        Get a list of patterns that never matched any file or directory.
+
+        Returns:
+            List of (RuleKind, pattern) tuples for patterns that didn't match anything
+        """
+        unmatched = []
+        for rule in self.rules:
+            if not self._pattern_matched.get(rule.pattern, False):
+                unmatched.append((rule.kind, rule.pattern))
+        return unmatched
 
 
 # Legacy functions for backward compatibility with brace expansion
